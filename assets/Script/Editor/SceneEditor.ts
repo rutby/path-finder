@@ -12,6 +12,7 @@ export default class SceneEditor extends cc.Component {
     @property(cc.Graphics) graphGrids: cc.Graphics = null;
     @property(cc.Graphics) graphTarget: cc.Graphics = null;
 
+    _posTouchBegan: cc.Vec2 = null;
     _posTarget: cc.Vec2 = null;
 
     //================================================ cc.Component
@@ -33,8 +34,16 @@ export default class SceneEditor extends cc.Component {
     //================================================ 
     onTouchBegan(event: cc.Event.EventTouch) {
         var touch = event.touch;
+        this._posTouchBegan = touch.getLocation();
+    }
 
+    onTouchEnded(event: cc.Event.EventTouch) {
+        var touch = event.touch;
         var posWorld = touch.getLocation();
+        if (posWorld.sub(this._posTouchBegan).mag() > 1) {
+            return;
+        }
+
         var posLocal = this.graphGrids.node.convertToNodeSpaceAR(posWorld);
         var posLogic = MapUtils.pos_view2map(posLocal);
 
@@ -43,9 +52,6 @@ export default class SceneEditor extends cc.Component {
         console.log('[develop] ========', 'logic', posLogic.x, posLogic.y);
 
         this.showTarget(posLogic);
-    }
-
-    onTouchEnded(event: cc.Event.EventTouch) {
     }
 
     /**
