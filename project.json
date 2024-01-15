@@ -1,0 +1,8 @@
+{
+  "engine": "cocos2d-html5",
+  "packages": "packages",
+  "version": "2.4.8",
+  "name": "PathFinder",
+  "id": "bd6f8d12-af7f-462d-8eb8-50be2e8b9bdb",
+  "isNew": false
+}
