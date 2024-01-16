@@ -134,18 +134,18 @@ export class MapUtils {
         for(let i = 0; i < map.length; i++) {
             var selected_grid = map[i];
             selected_grid.prev = null;
-            if (selected_grid.cost <= 0) {
+            if (selected_grid.flag == EnumFlagType.Terrain) {
                 continue;
             }
 
             var neighors = this.getNeighors(mapSize, selected_grid, Axis8);
-            var prev_grid: IGrid = null;
+            var prev_grid = selected_grid;
             for(let m = 0; m < neighors.length; m++) {
                 var neighor_index = this.convertMapPosToIndex(mapSize, neighors[m]);
                 var neighor_grid = map[neighor_index];
 
                 /** 排除地形 */
-                if (neighor_grid.cost < 0) {
+                if (neighor_grid.flag == EnumFlagType.Terrain) {
                     continue;
                 }
 
@@ -159,17 +159,19 @@ export class MapUtils {
                     var side1_index = this.convertMapPosToIndex(mapSize, side1);
                     var side0_grid = map[side0_index];
                     var side1_grid = map[side1_index];
-                    if (side0_grid.cost < 0 || side1_grid.cost < 0) {
+                    if (side0_grid.flag == EnumFlagType.Terrain || side1_grid.flag == EnumFlagType.Terrain) {
                         continue;
                     }
                 }
 
-                if (!prev_grid || neighor_grid.cost < prev_grid.cost) {
+                if (neighor_grid.cost < prev_grid.cost) {
                     prev_grid = neighor_grid;
                 }
             }
 
-            selected_grid.prev = prev_grid;
+            if (prev_grid != selected_grid) {
+                selected_grid.prev = prev_grid;
+            }
         }
     }
 }

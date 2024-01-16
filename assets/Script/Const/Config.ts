@@ -5,7 +5,7 @@ export class Config {
 
     //====================== Map
     static GridSize: cc.Size = cc.size(32, 32);
-    static MaxUnitCount: number = 20;
+    static MaxUnitCount: number = 30;
 }
 
 export class Events {
@@ -35,8 +35,8 @@ export enum EnumFlagType {
 
 export interface IMoveUnit {
     node: cc.Node,
-    prev?: number,
-    next?: number,
-    pos?: cc.Vec2,
-    path?: cc.Vec2[],
+    arrived: boolean,
+    ended: boolean,
+    dstMapPos: IPos,
+    curMapPos: IPos,
 }

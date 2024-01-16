@@ -74,22 +74,36 @@ export default class SceneEditor extends cc.Component {
 
             for(var i = 0; i < this._units.length; i++) {
                 var unit = this._units[i];
-                
-                var path = unit.path;
-                var currPos = unit.pos;
-                var nextPos = path[unit.next];
-                // @todo(chentao)
-                let disTotal = nextPos.sub(currPos).mag();
-                let percent = 1;
-                if (disTotal > 0.0001) {
-                    percent = cc.misc.clamp01(disStep / disTotal);
+                if (unit.ended) {
+                    continue;
                 }
-                unit.pos = currPos.lerp(nextPos, percent);
-                unit.node.setPosition(MapUtils.convertMapPosToViewPos(unit.pos));
+                
+                /** 选择下个目标点 */
+                if (unit.arrived) {
+                    var mapPos = MapUtils.convertViewPosToMapPos(unit.node.position);
+                    var mapIndex = MapUtils.convertMapPosToIndex(this._mapSize, mapPos);
+                    var grid = this._grids[mapIndex];
+                    if (grid.prev) {
+                        unit.dstMapPos = grid.prev;
+                        unit.arrived = false;
+                    } else {
+                        unit.ended = true;
+                    }
+                } else {
+                    var curVec2 = cc.v2(unit.curMapPos.x, unit.curMapPos.y);
+                    var dstVec2 = cc.v2(unit.dstMapPos.x, unit.dstMapPos.y);
+                    let disTotal = dstVec2.sub(curVec2).mag();
+                    let percent = 1;
+                    if (disTotal > 0.0001) {
+                        //@todo(chentao)
+                        percent = cc.misc.clamp01(disStep / disTotal);
+                    }
+                    unit.curMapPos = curVec2.lerp(dstVec2, percent);
+                    unit.node.setPosition(MapUtils.convertMapPosToViewPos(unit.curMapPos));
 
-                if (percent == 1) {
-                    unit.prev = unit.next;
-                    unit.next = Math.min(path.length-1, unit.next+1);
+                    if (percent == 1) {
+                        unit.arrived = true;
+                    }
                 }
             }
         }
@@ -109,7 +123,9 @@ export default class SceneEditor extends cc.Component {
         this._enableUnits = !this._enableUnits;
         this.nodeUnits.active = this._enableUnits;
 
+        /** 随机分配初始位置 */
         if (this._enableUnits) {
+            var occupied = {};
             for(var i = 0; i < Config.MaxUnitCount; i++) {
                 do {
                     var x = MiscUtils.randomRangeInt(0, 49);
@@ -117,24 +133,13 @@ export default class SceneEditor extends cc.Component {
                     var mapPos = cc.v2(x, y);
                     var index = MapUtils.convertMapPosToIndex(this._mapSize, mapPos);
                     var grid = this._grids[index];
-                } while (grid.flag != EnumFlagType.Path);
-
-                var path: cc.Vec2[] = [];
-                var prev = grid;
-                while(prev) {
-                    path.push(cc.v2(prev.x, prev.y));
-                    prev = prev.prev;
-                }
-                if (path.length == 1) {
-                    path[1] = path[0];
-                }
+                } while (grid.flag != EnumFlagType.Path && !occupied[index]);
+                occupied[index] = true;
 
                 var unit = this._units[i];
-                unit.path = path;
-                unit.prev = 0;
-                unit.next = 1;
-                unit.pos = path[unit.prev];
-                unit.node.setPosition(MapUtils.convertMapPosToViewPos(unit.pos));
+                unit.curMapPos = grid;
+                unit.node.setPosition(MapUtils.convertMapPosToViewPos(grid));
+                unit.arrived = true;
             }
         }
     }
@@ -239,6 +244,12 @@ export default class SceneEditor extends cc.Component {
                 arrow.active = !!grid.prev;
             }
         }
+
+        /** 重置单位寻路状态 */
+        for(var i = 0; i < this._units.length; i++) {
+            var unit = this._units[i];
+            unit.ended = false;
+        }
     }
 
     /** 加载地图数据 */
@@ -331,6 +342,7 @@ export default class SceneEditor extends cc.Component {
         this.nodeArrows.active = this._showVectorMap;
     }
 
+    /** 创建移动单位 */
     createUnits() {
         if (CC_EDITOR) {
             this.nodeUnits.destroyAllChildren();
