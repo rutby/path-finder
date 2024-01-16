@@ -23,4 +23,9 @@ export class MiscUtils {
         var num = (Math.random() * (max - min)) + min;
         return Math.round(num);
     }
+
+    static vec2deg(vec: cc.Vec2) {
+        var degree = cc.misc.radiansToDegrees(cc.v2(vec).signAngle(cc.v2(1, 0)));
+        return degree <= 0? -degree : 360 - degree;
+    }
 }

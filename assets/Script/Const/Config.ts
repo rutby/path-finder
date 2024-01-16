@@ -22,8 +22,10 @@ export interface IGrid {
     y: number,
     flag: number,
     cost?: number,
+    prev?: IGrid,
 }
 
 export enum EnumFlagType {
+    Path = 0,
     Terrain = 1,
 }

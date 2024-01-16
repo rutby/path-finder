@@ -13,12 +13,14 @@ export default class SceneEditor extends cc.Component {
     @property(cc.Node) nodeMap: cc.Node = null;
     @property(cc.Graphics) graphGrids: cc.Graphics = null;
     @property(cc.Graphics) graphTarget: cc.Graphics = null;
-    @property(cc.Node) nodeLabel: cc.Node = null;
+    @property(cc.Node) nodeLabels: cc.Node = null;
+    @property(cc.Node) nodeArrows: cc.Node = null;
     @property(cc.TiledMap) tilemap: cc.TiledMap = null;
 
     _posTouchBegan: cc.Vec2 = null;
     _posTarget: cc.Vec2 = null;
     _labels: cc.Label[] = [];
+    _arrows: cc.Node[] = [];
     _mapSize: cc.Size = null;
     _grids: IGrid[] = null;
 
@@ -39,6 +41,7 @@ export default class SceneEditor extends cc.Component {
 
         //====================== 
         this.createLabels();
+        this.createArrows();
         this.showGrids();
         cc.game.setFrameRate(30);
     }
@@ -132,7 +135,7 @@ export default class SceneEditor extends cc.Component {
     /**
      * 绘制热力图
      */
-    showHeatMap(showLabel?: boolean) {
+    showHeatMap(detail?: boolean) {
         if (!this._grids) {
             var grids: IGrid[] = [];
             var tiles = this.tilemap.getLayers()[0].getTiles();
@@ -149,7 +152,7 @@ export default class SceneEditor extends cc.Component {
                         x: mapPos.x,
                         y: mapPos.y,
                         flag: tiles[tileIndex],
-                        cost: 0,
+                        cost: -1,
                     });
                 }
             }
@@ -159,9 +162,25 @@ export default class SceneEditor extends cc.Component {
         MapUtils.createHeatMap(this._mapSize, this._grids, this._posTarget);
 
         /** 显示网格代价 */
-        if (showLabel) {
+        if (detail) {
             for(var i = 0; i < this._grids.length; i++) {
                 this._labels[i].string = `${this._grids[i].cost}`;
+            }
+        }
+
+        /** 生成向量图 */
+        MapUtils.createVectorMap(this._mapSize, this._grids);
+        /** 显示网格代价 */
+        if (detail) {
+            for(var i = 0; i < this._grids.length; i++) {
+                var grid = this._grids[i];
+                var arrow = this._arrows[i];
+                if (grid.prev) {
+                    var dx = grid.prev.x - grid.x;
+                    var dy = grid.prev.y - grid.y;
+                    arrow.angle = MiscUtils.vec2deg(cc.v2(dx, dy));
+                }
+                arrow.active = !!grid.prev;
             }
         }
     }
@@ -169,7 +188,7 @@ export default class SceneEditor extends cc.Component {
     /** 创建用于调试网格的文字集 */
     createLabels() {
         if (CC_EDITOR) {
-            this.nodeLabel.destroyAllChildren();
+            this.nodeLabels.destroyAllChildren();
             return;
         }
 
@@ -185,7 +204,7 @@ export default class SceneEditor extends cc.Component {
                 var viewPos = MapUtils.convertMapPosToViewPos(grid);
                 
                 var node = new cc.Node();
-                node.parent = this.nodeLabel;
+                node.parent = this.nodeLabels;
                 node.setPosition(viewPos.add(halfPos));
                 node.scale = 0.5;
                 node.color = cc.Color.BLACK;
@@ -193,6 +212,38 @@ export default class SceneEditor extends cc.Component {
                 label.string = ``;
                 label.cacheMode = cc.Label.CacheMode.CHAR;
                 this._labels.push(label);
+            }
+        }
+    }
+
+    /** 创建用于调试网格的方向集 */
+    createArrows() {
+        if (CC_EDITOR) {
+            this.nodeArrows.destroyAllChildren();
+            return;
+        }
+
+        var gw = Config.GridSize.width;
+        var gh = Config.GridSize.height;
+        var w = this._mapSize.width;
+        var h = this._mapSize.height;
+        var halfPos = cc.v2(gw/2, gh/2);
+        this._arrows = [];
+        for(var y = 0; y < h; y++) {
+            for(var x = 0; x < w; x++) {
+                var grid = {x: x, y: y};
+                var viewPos = MapUtils.convertMapPosToViewPos(grid);
+                
+                var node = new cc.Node();
+                node.parent = this.nodeArrows;
+                node.setPosition(viewPos.add(halfPos));
+                node.color = cc.Color.CYAN;
+                node.anchorX = 0;
+                node.active = false;
+                var label = node.addComponent(cc.Label);
+                label.string = `-`;
+                label.cacheMode = cc.Label.CacheMode.CHAR;
+                this._arrows.push(node);
             }
         }
     }
