@@ -32,3 +32,11 @@ export enum EnumFlagType {
     Path = 0,
     Terrain = 1,
 }
+
+export interface IMoveUnit {
+    node: cc.Node,
+    prev?: number,
+    next?: number,
+    pos?: cc.Vec2,
+    path?: cc.Vec2[],
+}

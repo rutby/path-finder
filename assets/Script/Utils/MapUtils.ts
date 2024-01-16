@@ -133,6 +133,7 @@ export class MapUtils {
     static createVectorMap(mapSize: cc.Size, map: IGrid[]) {
         for(let i = 0; i < map.length; i++) {
             var selected_grid = map[i];
+            selected_grid.prev = null;
             if (selected_grid.cost <= 0) {
                 continue;
             }

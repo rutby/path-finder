@@ -28,4 +28,6 @@ export class MiscUtils {
         var degree = cc.misc.radiansToDegrees(cc.v2(vec).signAngle(cc.v2(1, 0)));
         return degree <= 0? -degree : 360 - degree;
     }
+
+    // static lerpPath()
 }

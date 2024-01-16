@@ -1,6 +1,6 @@
 import EventMgr from "../Components/EventMgr";
 import KeyboardListener from "../Components/KeyboardListener";
-import { Config, EnumFlagType, Events, IGrid, IPos } from "../Const/Config";
+import { Config, EnumFlagType, Events, IGrid, IMoveUnit, IPos } from "../Const/Config";
 import { MapUtils } from "../Utils/MapUtils";
 import { MiscUtils } from "../Utils/MiscUtils";
 
@@ -25,7 +25,7 @@ export default class SceneEditor extends cc.Component {
     _posTarget: cc.Vec2 = null;
     _labels: cc.Label[] = [];
     _arrows: cc.Node[] = [];
-    _units: cc.Node[] = [];
+    _units: IMoveUnit[] = [];
     _mapSize: cc.Size = null;
     _grids: IGrid[] = null;
 
@@ -67,6 +67,32 @@ export default class SceneEditor extends cc.Component {
             this._posTarget = cc.v2(x, y);
             this.showHeatMap(true);
         }
+
+        if (this._enableUnits) {
+            var moveSpeed = 4;
+            var disStep = moveSpeed * dt;
+
+            for(var i = 0; i < this._units.length; i++) {
+                var unit = this._units[i];
+                
+                var path = unit.path;
+                var currPos = unit.pos;
+                var nextPos = path[unit.next];
+                // @todo(chentao)
+                let disTotal = nextPos.sub(currPos).mag();
+                let percent = 1;
+                if (disTotal > 0.0001) {
+                    percent = cc.misc.clamp01(disStep / disTotal);
+                }
+                unit.pos = currPos.lerp(nextPos, percent);
+                unit.node.setPosition(MapUtils.convertMapPosToViewPos(unit.pos));
+
+                if (percent == 1) {
+                    unit.prev = unit.next;
+                    unit.next = Math.min(path.length-1, unit.next+1);
+                }
+            }
+        }
     }
 
     //================================================ events
@@ -77,6 +103,9 @@ export default class SceneEditor extends cc.Component {
 
     _enableUnits: boolean = false;
     onEventSwitchUnits() {
+        if (!this._posTarget) {
+            return;
+        }
         this._enableUnits = !this._enableUnits;
         this.nodeUnits.active = this._enableUnits;
 
@@ -90,8 +119,22 @@ export default class SceneEditor extends cc.Component {
                     var grid = this._grids[index];
                 } while (grid.flag != EnumFlagType.Path);
 
-                var viwePos = MapUtils.convertMapPosToViewPos(mapPos);
-                this._units[i].setPosition(viwePos);
+                var path: cc.Vec2[] = [];
+                var prev = grid;
+                while(prev) {
+                    path.push(cc.v2(prev.x, prev.y));
+                    prev = prev.prev;
+                }
+                if (path.length == 1) {
+                    path[1] = path[0];
+                }
+
+                var unit = this._units[i];
+                unit.path = path;
+                unit.prev = 0;
+                unit.next = 1;
+                unit.pos = path[unit.prev];
+                unit.node.setPosition(MapUtils.convertMapPosToViewPos(unit.pos));
             }
         }
     }
@@ -303,7 +346,7 @@ export default class SceneEditor extends cc.Component {
             var label = node.addComponent(cc.Label);
             label.string = `@`;
             label.cacheMode = cc.Label.CacheMode.CHAR;
-            this._units.push(node);
+            this._units.push({ node: node, })
         }
     }
 }
