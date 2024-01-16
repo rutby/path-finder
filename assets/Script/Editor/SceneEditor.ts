@@ -1,8 +1,11 @@
 import EventMgr from "../Components/EventMgr";
 import KeyboardListener from "../Components/KeyboardListener";
-import { Config, Events, IGrid, IPos } from "../Const/Config";
+import { Config, EnumFlagType, Events, IGrid, IPos } from "../Const/Config";
 import { MapUtils } from "../Utils/MapUtils";
 import { MiscUtils } from "../Utils/MiscUtils";
+
+var GridW = Config.GridSize.width;
+var GridH = Config.GridSize.height;
 
 const {ccclass, property, executeInEditMode, menu} = cc._decorator;
 @ccclass
@@ -15,12 +18,14 @@ export default class SceneEditor extends cc.Component {
     @property(cc.Graphics) graphTarget: cc.Graphics = null;
     @property(cc.Node) nodeLabels: cc.Node = null;
     @property(cc.Node) nodeArrows: cc.Node = null;
+    @property(cc.Node) nodeUnits: cc.Node = null;
     @property(cc.TiledMap) tilemap: cc.TiledMap = null;
 
     _posTouchBegan: cc.Vec2 = null;
     _posTarget: cc.Vec2 = null;
     _labels: cc.Label[] = [];
     _arrows: cc.Node[] = [];
+    _units: cc.Node[] = [];
     _mapSize: cc.Size = null;
     _grids: IGrid[] = null;
 
@@ -29,19 +34,24 @@ export default class SceneEditor extends cc.Component {
         //====================== 
         CC_PREVIEW && this.node.addComponent(KeyboardListener);
         EventMgr.sub(Events.Debug_Switch_Profiler, this.onEventSwitchProfiler, this);
+        EventMgr.sub(Events.Debug_Switch_Units, this.onEventSwitchUnits, this);
+        EventMgr.sub(Events.Debug_Switch_VectorMap, this.onEventSwitchVector, this);
 
         //====================== 
         this._mapSize = this.tilemap.getMapSize();
-        var mapViewSize = cc.size(this._mapSize.width * Config.GridSize.width, this._mapSize.height * Config.GridSize.height);
+        var mapViewSize = cc.size(this._mapSize.width * GridW, this._mapSize.height * GridH);
         this.node.setContentSize(mapViewSize)
         this.nodeMap.position = cc.v3(-mapViewSize.width/2, -mapViewSize.height/2);
+        this.nodeUnits.position = cc.v3(GridW/2, GridH/2);
 
         this.node.on(cc.Node.EventType.TOUCH_START, this.onTouchBegan, this);
         this.node.on(cc.Node.EventType.TOUCH_END, this.onTouchEnded, this);
 
         //====================== 
+        this.loadMap();
         this.createLabels();
         this.createArrows();
+        this.createUnits();
         this.showGrids();
         cc.game.setFrameRate(30);
     }
@@ -63,6 +73,33 @@ export default class SceneEditor extends cc.Component {
     _enableProfiler: boolean = false;
     onEventSwitchProfiler() {
         this._enableProfiler = !this._enableProfiler;
+    }
+
+    _enableUnits: boolean = false;
+    onEventSwitchUnits() {
+        this._enableUnits = !this._enableUnits;
+        this.nodeUnits.active = this._enableUnits;
+
+        if (this._enableUnits) {
+            for(var i = 0; i < Config.MaxUnitCount; i++) {
+                do {
+                    var x = MiscUtils.randomRangeInt(0, 49);
+                    var y = MiscUtils.randomRangeInt(0, 49);
+                    var mapPos = cc.v2(x, y);
+                    var index = MapUtils.convertMapPosToIndex(this._mapSize, mapPos);
+                    var grid = this._grids[index];
+                } while (grid.flag != EnumFlagType.Path);
+
+                var viwePos = MapUtils.convertMapPosToViewPos(mapPos);
+                this._units[i].setPosition(viwePos);
+            }
+        }
+    }
+
+    _showVectorMap: boolean = false;
+    onEventSwitchVector() {
+        this._showVectorMap = !this._showVectorMap;
+        this.nodeArrows.active = this._showVectorMap;
     }
 
     //================================================ 
@@ -91,8 +128,8 @@ export default class SceneEditor extends cc.Component {
      * 以左下角为原点的笛卡尔坐标系
      */
     showGrids() {
-        var gw = Config.GridSize.width;
-        var gh = Config.GridSize.height;
+        var gw = GridW;
+        var gh = GridH;
         var mw = this._mapSize.width * gw;
         var mh = this._mapSize.height * gh;
         var origin = cc.Vec2.ZERO;
@@ -120,8 +157,8 @@ export default class SceneEditor extends cc.Component {
             return;
         }
 
-        var gw = Config.GridSize.width;
-        var gh = Config.GridSize.height;
+        var gw = GridW;
+        var gh = GridH;
         var mw = this._mapSize.width * gw;
         var mh = this._mapSize.height * gh;
 
@@ -136,31 +173,7 @@ export default class SceneEditor extends cc.Component {
      * 绘制热力图
      */
     showHeatMap(detail?: boolean) {
-        if (!this._grids) {
-            var grids: IGrid[] = [];
-            var tiles = this.tilemap.getLayers()[0].getTiles();
-            var mh = this._mapSize.height;
-            var mw = this._mapSize.width;
-            /** tilemap以左上角为原点 从左到右, 从上到下 */
-            for(var y = 0; y < mh; y++) {
-                for(var x = 0; x < mw; x++) {
-                    var fy = (mh - y - 1);
-                    var tileIndex = fy * mw + x;
-                    var mapIndex = y * mw + x;
-                    var mapPos = MapUtils.convertIndexToMapPos(this._mapSize, mapIndex);
-                    grids.push({
-                        x: mapPos.x,
-                        y: mapPos.y,
-                        flag: tiles[tileIndex],
-                        cost: -1,
-                    });
-                }
-            }
-            this._grids = grids;
-        }
-
         MapUtils.createHeatMap(this._mapSize, this._grids, this._posTarget);
-
         /** 显示网格代价 */
         if (detail) {
             for(var i = 0; i < this._grids.length; i++) {
@@ -185,6 +198,32 @@ export default class SceneEditor extends cc.Component {
         }
     }
 
+    /** 加载地图数据 */
+    loadMap() {
+        if (!this._grids) {
+            var grids: IGrid[] = [];
+            var tiles = this.tilemap.getLayers()[0].getTiles();
+            var mh = this._mapSize.height;
+            var mw = this._mapSize.width;
+            /** tilemap以左上角为原点 从左到右, 从上到下 */
+            for(var y = 0; y < mh; y++) {
+                for(var x = 0; x < mw; x++) {
+                    var fy = (mh - y - 1);
+                    var tileIndex = fy * mw + x;
+                    var mapIndex = y * mw + x;
+                    var mapPos = MapUtils.convertIndexToMapPos(this._mapSize, mapIndex);
+                    grids.push({
+                        x: mapPos.x,
+                        y: mapPos.y,
+                        flag: tiles[tileIndex],
+                        cost: -1,
+                    });
+                }
+            }
+            this._grids = grids;
+        }
+    }
+
     /** 创建用于调试网格的文字集 */
     createLabels() {
         if (CC_EDITOR) {
@@ -192,8 +231,8 @@ export default class SceneEditor extends cc.Component {
             return;
         }
 
-        var gw = Config.GridSize.width;
-        var gh = Config.GridSize.height;
+        var gw = GridW;
+        var gh = GridH;
         var w = this._mapSize.width;
         var h = this._mapSize.height;
         var halfPos = cc.v2(gw/2, gh/2);
@@ -223,8 +262,8 @@ export default class SceneEditor extends cc.Component {
             return;
         }
 
-        var gw = Config.GridSize.width;
-        var gh = Config.GridSize.height;
+        var gw = GridW;
+        var gh = GridH;
         var w = this._mapSize.width;
         var h = this._mapSize.height;
         var halfPos = cc.v2(gw/2, gh/2);
@@ -245,6 +284,26 @@ export default class SceneEditor extends cc.Component {
                 label.cacheMode = cc.Label.CacheMode.CHAR;
                 this._arrows.push(node);
             }
+        }
+        this.nodeArrows.active = this._showVectorMap;
+    }
+
+    createUnits() {
+        if (CC_EDITOR) {
+            this.nodeUnits.destroyAllChildren();
+            return;
+        }
+
+        this._units = [];
+        for(var i = 0; i < Config.MaxUnitCount; i++) {
+            var node = new cc.Node();
+            node.parent = this.nodeUnits;
+            node.color = cc.Color.GREEN;
+            node.scale = 0.5;
+            var label = node.addComponent(cc.Label);
+            label.string = `@`;
+            label.cacheMode = cc.Label.CacheMode.CHAR;
+            this._units.push(node);
         }
     }
 }

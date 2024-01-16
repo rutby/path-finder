@@ -70,6 +70,18 @@ export default class KeyboardListener extends cc.Component {
                     EventMgr.pub(Events.Debug_Switch_Profiler);
 				},
 			},
+            ['Q'.charCodeAt(0)]: {
+				desc: '生成移动单位',
+				func: () => {
+                    EventMgr.pub(Events.Debug_Switch_Units);
+				},
+			},
+            ['V'.charCodeAt(0)]: {
+				desc: '切换向量图',
+				func: () => {
+                    EventMgr.pub(Events.Debug_Switch_VectorMap);
+				},
+			},
 		};
 	}
 

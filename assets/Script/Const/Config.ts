@@ -1,14 +1,17 @@
 
 export class Config {
-    //====================== 
+    //====================== Game
     static DesignResolution: cc.Size = cc.size(1136, 640);
 
-    //====================== 
+    //====================== Map
     static GridSize: cc.Size = cc.size(32, 32);
+    static MaxUnitCount: number = 20;
 }
 
 export class Events {
     static Debug_Switch_Profiler: string = 'Debug_Switch_Profiler';
+    static Debug_Switch_Units: string = 'Debug_Switch_Units';
+    static Debug_Switch_VectorMap: string = 'Debug_Switch_VectorMap';
 }
 
 //================================================ 
