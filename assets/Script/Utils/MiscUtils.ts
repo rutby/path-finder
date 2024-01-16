@@ -4,19 +4,18 @@ export class MiscUtils {
         this._recordStartTs[tag] = new Date().getTime();
     }
 
-    static timeRecordEnd(tag: string, desc?: string, clear?: boolean) {
+    static timeRecordEnd(tag: string, clear?: boolean) {
         if (!this._recordStartTs[tag]) {
             console.warn("use timeRecordStart before", tag);
             return;
         }
-        desc = desc || '';
 
         var last = this._recordStartTs[tag];
         var curr = new Date().getTime();
         if (clear) {
             delete this._recordStartTs[tag];
         }
-        console.log('[develop] ========', '[TimeRecord]', tag, desc, curr - last);
+        console.log('[develop] ========', '[TimeRecord]', tag, curr - last);
     }
 
     static randomRangeInt(min: number, max: number) {

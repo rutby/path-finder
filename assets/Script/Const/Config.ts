@@ -12,6 +12,7 @@ export class Events {
     static Debug_Switch_Profiler: string = 'Debug_Switch_Profiler';
     static Debug_Switch_Units: string = 'Debug_Switch_Units';
     static Debug_Switch_VectorMap: string = 'Debug_Switch_VectorMap';
+    static Debug_Switch_KeyPoint: string = 'Debug_Switch_keyPoint';
 }
 
 //================================================ 
@@ -26,6 +27,7 @@ export interface IGrid {
     flag: number,
     cost?: number,
     prev?: IGrid,
+    isKeypoint?: boolean,
 }
 
 export enum EnumFlagType {
@@ -35,8 +37,8 @@ export enum EnumFlagType {
 
 export interface IMoveUnit {
     node: cc.Node,
-    arrived: boolean,
-    ended: boolean,
-    dstMapPos: IPos,
-    curMapPos: IPos,
+    isArrived?: boolean,
+    ended?: boolean,
+    dstMapPos?: IPos,
+    curMapPos?: IPos,
 }

@@ -82,6 +82,12 @@ export default class KeyboardListener extends cc.Component {
                     EventMgr.pub(Events.Debug_Switch_VectorMap);
 				},
 			},
+            ['K'.charCodeAt(0)]: {
+				desc: '切换关键点',
+				func: () => {
+                    EventMgr.pub(Events.Debug_Switch_KeyPoint);
+				},
+			},
 		};
 	}
 

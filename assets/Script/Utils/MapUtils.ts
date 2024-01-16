@@ -55,8 +55,6 @@ export class MapUtils {
      *      * 50x50 数组 11ms
      */
     static createHeatMap(mapSize: cc.Size, map: IGrid[], target_pos: cc.Vec2) {
-        // MiscUtils.timeRecordStart('createHeatMap');
-
         var open_list:{index: number, cost: number}[] = [];
         var close_list:{index: number, cost: number}[] = [];
 
@@ -111,8 +109,6 @@ export class MapUtils {
                 }
             }
         }
-
-        // MiscUtils.timeRecordEnd('createHeatMap', 'end', true);
     }
 
     static getNeighors(mapSize: cc.Size, posGrid: IPos, Axis: cc.Vec2[]): IPos[] {
@@ -172,6 +168,58 @@ export class MapUtils {
             if (prev_grid != selected_grid) {
                 selected_grid.prev = prev_grid;
             }
+        }
+    }
+
+    /**
+     * 标记关键点
+     *      * 一个点周围八方向有一个或多个不相邻的障碍物
+     */
+    static createKeypoints(mapSize: cc.Size, map: IGrid[]) {
+        for(let i = 0; i < map.length; i++) {
+            let blocks: IGrid[] = [];
+            let selected_grid = map[i];
+            if (selected_grid.flag == EnumFlagType.Path) {
+                let neighors = this.getNeighors(mapSize, selected_grid, Axis8);
+                for(let j = 0; j < neighors.length; j++) {
+                    let neighor_index = this.convertMapPosToIndex(mapSize, neighors[j]);
+                    let neighor_grid = map[neighor_index];
+                    if (neighor_grid.flag == EnumFlagType.Terrain) {
+                        let isClose = blocks.length > 0;
+                        for(let block_index = 0; block_index < blocks.length; block_index++) {
+                            let block_grid = blocks[block_index];
+                            let dx = Math.abs(block_grid.x - neighor_grid.x);
+                            let dy = Math.abs(block_grid.y - neighor_grid.y);
+                            if (dx == 2 || dy == 2) {
+                                isClose = false;
+                            } else {
+                                if (dx + dy > 2) {
+                                    isClose = false;
+                                }
+                            }
+                        }
+                        if (!isClose) {
+                            blocks.push(neighor_grid);
+                        } else {
+                            /** 存在相邻节点, 则判定为不是有效关键点 */
+                            blocks = [];
+                            break;
+                        }
+                    }
+                }
+            }
+
+            /** 剔除正交方向 */
+            for(let i = 0; i < blocks.length; i++) {
+                let block_grid = blocks[i];
+                let dx = Math.abs(block_grid.x - selected_grid.x);
+                let dy = Math.abs(block_grid.y - selected_grid.y);
+                if (dx + dy == 1) {
+                    blocks = [];
+                    break;
+                }
+            }
+            selected_grid.isKeypoint = blocks.length > 0;
         }
     }
 }
