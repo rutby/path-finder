@@ -1,4 +1,5 @@
-import { Config } from "../Const/Config";
+import { Config, Events } from "../Const/Config";
+import EventMgr from "./EventMgr";
 
 const { ccclass } = cc._decorator;
 @ccclass
@@ -53,12 +54,20 @@ export default class KeyboardListener extends cc.Component {
 					cc.Camera.main.zoomRatio = cc.Camera.main.zoomRatio - 0.1;
 				},
 			},
+
+            //================================================ 
             ['R'.charCodeAt(0)]: {
 				desc: '重置地图',
 				func: () => {
                     cc.Camera.main.zoomRatio = 1;
                     cc.Camera.main.node.x = 0;
                     cc.Camera.main.node.y = 0;
+				},
+			},
+            ['P'.charCodeAt(0)]: {
+				desc: '切换性能测试',
+				func: () => {
+                    EventMgr.pub(Events.Debug_Switch_Profiler);
 				},
 			},
 		};
