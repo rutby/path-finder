@@ -12,11 +12,11 @@ var Axis8 = [
     cc.v2(-1, 1),
     cc.v2(0, 1),
     cc.v2(1, 1),
-    cc.v2(-1, 0),
     cc.v2(1, 0),
-    cc.v2(-1, -1),
-    cc.v2(0, -1),
     cc.v2(1, -1),
+    cc.v2(0, -1),
+    cc.v2(-1, -1),
+    cc.v2(-1, 0),
 ];
 
 var GridWidth = Config.GridSize.width;
@@ -55,6 +55,7 @@ export class MapUtils {
      *      * 50x50 数组 11ms
      */
     static createHeatMap(mapSize: cc.Size, map: IGrid[], target_pos: cc.Vec2) {
+        MiscUtils.timeRecordStart('createHeatMap');
         var open_list:{index: number, cost: number}[] = [];
         var close_list:{index: number, cost: number}[] = [];
 
@@ -109,13 +110,14 @@ export class MapUtils {
                 }
             }
         }
+        MiscUtils.timeRecordEnd('createHeatMap');
     }
 
     static getNeighors(mapSize: cc.Size, posGrid: IPos, Axis: cc.Vec2[]): IPos[] {
         var arr = [];
         for(var i = 0; i < Axis.length; i++) {
             var dir = Axis[i];
-            var dst = {x: posGrid.x - dir.x, y: posGrid.y - dir.y};
+            var dst = {x: posGrid.x + dir.x, y: posGrid.y + dir.y};
             if (dst.x >= 0 && dst.x < mapSize.width && dst.y >= 0 && dst.y < mapSize.height) {
                 arr.push(dst);
             }
@@ -176,50 +178,51 @@ export class MapUtils {
      *      * 一个点周围八方向有一个或多个不相邻的障碍物
      */
     static createKeypoints(mapSize: cc.Size, map: IGrid[]) {
+        MiscUtils.timeRecordStart('createKeypoints');
         for(let i = 0; i < map.length; i++) {
             let blocks: IGrid[] = [];
             let selected_grid = map[i];
+            var existIsolate = false;
+
             if (selected_grid.flag == EnumFlagType.Path) {
                 let neighors = this.getNeighors(mapSize, selected_grid, Axis8);
+                let last_neighor = neighors[neighors.length-1];
+                let last_neighor_index = this.convertMapPosToIndex(mapSize, last_neighor);
+                let last_neighor_grid = map[last_neighor_index];
+                let nearCount = last_neighor_grid.flag == EnumFlagType.Terrain? 1: 0;
                 for(let j = 0; j < neighors.length; j++) {
                     let neighor_index = this.convertMapPosToIndex(mapSize, neighors[j]);
                     let neighor_grid = map[neighor_index];
                     if (neighor_grid.flag == EnumFlagType.Terrain) {
-                        let isClose = blocks.length > 0;
-                        for(let block_index = 0; block_index < blocks.length; block_index++) {
-                            let block_grid = blocks[block_index];
-                            let dx = Math.abs(block_grid.x - neighor_grid.x);
-                            let dy = Math.abs(block_grid.y - neighor_grid.y);
-                            if (dx == 2 || dy == 2) {
-                                isClose = false;
-                            } else {
-                                if (dx + dy > 2) {
-                                    isClose = false;
-                                }
-                            }
+                        blocks.push(neighor_grid);
+                        nearCount++;
+                    } else {
+                        let dx = Math.abs(neighor_grid.x - selected_grid.x);
+                        let dy = Math.abs(neighor_grid.y - selected_grid.y);
+                        if (nearCount == 1 && (dx + dy) == 1) {
+                            existIsolate = true;
                         }
-                        if (!isClose) {
-                            blocks.push(neighor_grid);
-                        } else {
-                            /** 存在相邻节点, 则判定为不是有效关键点 */
-                            blocks = [];
-                            break;
-                        }
+                        nearCount = 0;
                     }
                 }
             }
 
-            /** 剔除正交方向 */
-            for(let i = 0; i < blocks.length; i++) {
-                let block_grid = blocks[i];
-                let dx = Math.abs(block_grid.x - selected_grid.x);
-                let dy = Math.abs(block_grid.y - selected_grid.y);
-                if (dx + dy == 1) {
-                    blocks = [];
-                    break;
-                }
+            if (!existIsolate) {
+            //     /** 剔除相邻节点 */
+            //     for(let i = 0; i < blocks.length; i++) {
+            //         let block_grid = blocks[i];
+            //         let dx = Math.abs(block_grid.x - selected_grid.x);
+            //         let dy = Math.abs(block_grid.y - selected_grid.y);
+            //         if (dx + dy > 1) {
+            //             blocks = [];
+            //             break;
+            //         }
+            //     }
             }
-            selected_grid.isKeypoint = blocks.length > 0;
+            
+            selected_grid.isKeypoint = existIsolate;
+            // selected_grid.isKeypoint = blocks.length > 0;
         }
+        MiscUtils.timeRecordEnd('createKeypoints');
     }
 }
