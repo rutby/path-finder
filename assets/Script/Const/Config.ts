@@ -6,6 +6,7 @@ export class Config {
     //====================== Map
     static GridSize: cc.Size = cc.size(32, 32);
     static MaxUnitCount: number = 30;
+    static EnableOptimize: boolean = false;
 }
 
 export class Events {
@@ -13,6 +14,8 @@ export class Events {
     static Debug_Switch_Units: string = 'Debug_Switch_Units';
     static Debug_Switch_VectorMap: string = 'Debug_Switch_VectorMap';
     static Debug_Switch_KeyPoint: string = 'Debug_Switch_keyPoint';
+    static Debug_Switch_Index: string = 'Debug_Switch_Index';
+    static Debug_Switch_Optmize: string = 'Debug_Switch_Optmize';
 }
 
 //================================================ 
@@ -24,6 +27,7 @@ export interface IPos {
 export interface IGrid {
     x: number,
     y: number,
+    index: number,
     flag: number,
     cost?: number,
     prev?: IGrid,
@@ -49,4 +53,14 @@ export interface IMoveUnit {
 export enum EnumOrientation {
     Horizontal,
     Vertical,
+}
+
+export interface ISegment {
+    points: IGrid[], 
+    orient: EnumOrientation,
+}
+
+export interface INode {
+    index: number,
+    cost: number,
 }

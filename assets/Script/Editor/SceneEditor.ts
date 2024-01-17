@@ -1,6 +1,6 @@
 import EventMgr from "../Components/EventMgr";
 import KeyboardListener from "../Components/KeyboardListener";
-import { Config, EnumFlagType, EnumOrientation, Events, IGrid, IMoveUnit, IPos } from "../Const/Config";
+import { Config, EnumFlagType, EnumOrientation, Events, IGrid, IMoveUnit, IPos, ISegment } from "../Const/Config";
 import { MapUtils } from "../Utils/MapUtils";
 import { MiscUtils } from "../Utils/MiscUtils";
 
@@ -25,13 +25,16 @@ export default class SceneEditor extends cc.Component {
     @property(cc.TiledMap) tilemap: cc.TiledMap = null;
 
     _posTouchBegan: cc.Vec2 = null;
-    _targetMapPos: cc.Vec2 = null;
+    _currMapPos: cc.Vec2 = null;
     _labels: cc.Label[] = [];
     _arrows: cc.Node[] = [];
     _units: IMoveUnit[] = [];
     /** 地图网格尺寸 50x50 */
     _mapSize: cc.Size = null;
     _grids: IGrid[] = null;
+    _graph: any = {};
+    _points: IGrid[] = null;
+    _segments: ISegment[] = null;
 
     //================================================ cc.Component
     start () {
@@ -41,6 +44,8 @@ export default class SceneEditor extends cc.Component {
         EventMgr.sub(Events.Debug_Switch_Units, this.onEventSwitchUnits, this);
         EventMgr.sub(Events.Debug_Switch_VectorMap, this.onEventSwitchVector, this);
         EventMgr.sub(Events.Debug_Switch_KeyPoint, this.onEventSwitchKeypoint, this);
+        EventMgr.sub(Events.Debug_Switch_Index, this.onEventSwitchIndex, this);
+        EventMgr.sub(Events.Debug_Switch_Optmize, this.onEventSwitchOptmize, this);
 
         //====================== 
         this._mapSize = this.tilemap.getMapSize();
@@ -53,11 +58,8 @@ export default class SceneEditor extends cc.Component {
         this.node.on(cc.Node.EventType.TOUCH_END, this.onTouchEnded, this);
 
         //====================== 
-        this.loadMap();
-        this.createLabels();
-        this.createArrows();
-        this.createUnits();
         this.showGrids();
+        this.reloadAll();
         cc.game.setFrameRate(30);
     }
 
@@ -69,7 +71,7 @@ export default class SceneEditor extends cc.Component {
         if (this._enableProfiler) {
             var x = MiscUtils.randomRangeInt(0, 49);
             var y = MiscUtils.randomRangeInt(0, 49);
-            this._targetMapPos = cc.v2(x, y);
+            this._currMapPos = cc.v2(x, y);
             this.showHeatMap(true);
         }
 
@@ -114,6 +116,27 @@ export default class SceneEditor extends cc.Component {
         }
     }
 
+    //================================================ 
+    reloadAll() {
+        this.loadMap();
+        this.loadLabels();
+        this.loadArrows();
+        this.loadUnits();
+    }
+
+    clearAll() {
+        this.graphTarget.clear();
+        this.graphKeypoint.clear();
+        this.graphSegmentsHori.clear();
+        this.graphSegmentsVert.clear();
+
+        this._enableProfiler = false;
+        this._enableUnits = false;
+        this._enableVectorMap = false;
+        this._enableKeypoint = false;
+        this._enableIndex = false;
+    }
+
     //================================================ events
     _enableProfiler: boolean = false;
     onEventSwitchProfiler() {
@@ -122,7 +145,7 @@ export default class SceneEditor extends cc.Component {
 
     _enableUnits: boolean = false;
     onEventSwitchUnits() {
-        if (!this._targetMapPos) {
+        if (!this._currMapPos) {
             return;
         }
         this._enableUnits = !this._enableUnits;
@@ -149,20 +172,40 @@ export default class SceneEditor extends cc.Component {
         }
     }
 
-    _showVectorMap: boolean = false;
+    _enableVectorMap: boolean = false;
     onEventSwitchVector() {
-        this._showVectorMap = !this._showVectorMap;
-        this.nodeArrows.active = this._showVectorMap;
+        this._enableVectorMap = !this._enableVectorMap;
+        this.nodeArrows.active = this._enableVectorMap;
     }
 
-    _showKeypoint: boolean = false;
+    _enableKeypoint: boolean = false;
     onEventSwitchKeypoint() {
-        this._showKeypoint = !this._showKeypoint;
-        this.graphKeypoint.node.active = this._showKeypoint;
+        this._enableKeypoint = !this._enableKeypoint;
+        this.graphKeypoint.node.active = this._enableKeypoint;
 
-        if (this._showKeypoint) {
+        if (this._enableKeypoint) {
             this.showKeypoints();
         }
+    }
+
+    _enableIndex: boolean = false;
+    onEventSwitchIndex() {
+        this._enableIndex = !this._enableIndex;
+
+        for(let i = 0; i < this._grids.length; i++) {
+            let grid = this._grids[i];
+            let index = MapUtils.convertMapPosToIndex(this._mapSize, grid);
+            this._labels[i].string = this._enableIndex? `${index}`: '';
+            this._labels[i].node.scale = this._enableIndex? 0.33: 1;
+        }
+    }
+
+    _enableOptmize: boolean = Config.EnableOptimize;
+    onEventSwitchOptmize() {
+        this._enableOptmize = !this._enableOptmize;
+
+        this.clearAll();
+        this.reloadAll();
     }
 
     //================================================ 
@@ -181,11 +224,12 @@ export default class SceneEditor extends cc.Component {
         var posLocal = this.graphGrids.node.convertToNodeSpaceAR(posWorld);
         var posLogic = MapUtils.convertViewPosToMapPos(posLocal);
 
-        this._targetMapPos = posLogic;
+        this._currMapPos = posLogic;
         this.showTarget();
         this.showHeatMap(true);
     }
 
+    //================================================ display
     /**
      * 绘制网格
      * 以左下角为原点的笛卡尔坐标系
@@ -212,32 +256,38 @@ export default class SceneEditor extends cc.Component {
         this.graphGrids.stroke();
     }
 
-    /**
-     * 绘制目标地点
-     */
+    /** 绘制目标地点 */
     showTarget() {
-        if (!this._targetMapPos) {
+        if (!this._currMapPos) {
             return;
         }
 
         this.graphTarget.clear();
-        this.fillGrid(this.graphTarget, this._targetMapPos);
+        this.fillGrid(this.graphTarget, this._currMapPos);
     }
 
+    _lastMapPos: IPos = null;
     /**
      * 绘制热力图
      */
     showHeatMap(detail?: boolean) {
-        MapUtils.createHeatMap(this._mapSize, this._grids, this._targetMapPos);
+        if (this._enableOptmize) {
+            MapUtils.delGraphElement(this._mapSize, this._graph, this._lastMapPos);
+            MapUtils.addGraphElement(this._mapSize, this._graph, this._points, this._segments, this._currMapPos);
+        }
+        MapUtils.createHeatMap(this._mapSize, this._graph, this._grids, this._currMapPos);
+
         /** 显示网格代价 */
         if (detail) {
-            for(var i = 0; i < this._grids.length; i++) {
-                this._labels[i].string = `${this._grids[i].cost}`;
+            for(let i = 0; i < this._grids.length; i++) {
+                let grid = this._grids[i];
+                this._labels[i].string = grid.flag == EnumFlagType.Path? `${Number(grid.cost).toFixed(0)}`: '';
+                this._labels[i].node.scale = 0.5;
             }
         }
 
         /** 生成向量图 */
-        MapUtils.createVectorMap(this._mapSize, this._grids);
+        MapUtils.createVectorMap(this._mapSize, this._graph, this._grids);
         /** 显示网格代价 */
         if (detail) {
             for(var i = 0; i < this._grids.length; i++) {
@@ -257,26 +307,28 @@ export default class SceneEditor extends cc.Component {
             var unit = this._units[i];
             unit.ended = false;
         }
+
+        this._lastMapPos = this._currMapPos;
     }
 
-    /**
-     * 绘制关键点
-     */
+    /** 绘制关键点 */
     showKeypoints() {
-        MapUtils.createKeypoints(this._mapSize, this._grids);
-        this.graphKeypoint.clear();
-        for(var i = 0; i < this._grids.length; i++) {
-            var grid = this._grids[i];
-            if (grid.isKeypoint) {
-                this.fillGrid(this.graphKeypoint, grid);
-            }
+        if (!this._points) {
+            return;
         }
 
-        let segments = MapUtils.createSegments(this._mapSize, this._grids);
+        /** 显示关键点 */
+        this.graphKeypoint.clear();
+        for(var i = 0; i < this._points.length; i++) {
+            var grid = this._points[i];
+            this.fillGrid(this.graphKeypoint, grid);
+        }
+
+        /** 显示阻挡线段 */
         this.graphSegmentsHori.clear();
         this.graphSegmentsVert.clear();
-        for(let i = 0; i < segments.length; i++) {
-            let segment = segments[i];
+        for(let i = 0; i < this._segments.length; i++) {
+            let segment = this._segments[i];
             let startPos = segment.points[0];
             let endPos = segment.points[1];
             if (segment.orient == EnumOrientation.Horizontal) {
@@ -291,36 +343,54 @@ export default class SceneEditor extends cc.Component {
         }
     }
 
+    //================================================ load
     /** 加载地图数据 */
     loadMap() {
-        if (!this._grids) {
-            var grids: IGrid[] = [];
-            var tiles = this.tilemap.getLayers()[0].getTiles();
-            var mh = this._mapSize.height;
-            var mw = this._mapSize.width;
-            /** tilemap以左上角为原点 从左到右, 从上到下 */
-            for(var y = 0; y < mh; y++) {
-                for(var x = 0; x < mw; x++) {
-                    var fy = (mh - y - 1);
-                    var tileIndex = fy * mw + x;
-                    var mapIndex = y * mw + x;
-                    var mapPos = MapUtils.convertIndexToMapPos(this._mapSize, mapIndex);
-                    grids.push({
-                        x: mapPos.x,
-                        y: mapPos.y,
-                        flag: tiles[tileIndex],
-                        cost: -1,
-                    });
-                }
+        //================================================ 加载网格数据
+        var grids: IGrid[] = [];
+        var tiles = this.tilemap.getLayers()[0].getTiles();
+        var mh = this._mapSize.height;
+        var mw = this._mapSize.width;
+        /** tilemap以左上角为原点 从左到右, 从上到下 */
+        for(var y = 0; y < mh; y++) {
+            for(var x = 0; x < mw; x++) {
+                var fy = (mh - y - 1);
+                var tileIndex = fy * mw + x;
+                var mapIndex = y * mw + x;
+                var mapPos = MapUtils.convertIndexToMapPos(this._mapSize, mapIndex);
+                grids.push({
+                    x: mapPos.x,
+                    y: mapPos.y,
+                    index: mapIndex,
+                    flag: tiles[tileIndex],
+                    cost: -1,
+                });
             }
-            this._grids = grids;
+        }
+        this._grids = grids;
+
+        //================================================ 生成连通图
+        if (this._enableOptmize) {
+            /** 生成关键点 */
+            this._points = MapUtils.createKeypoints(this._mapSize, this._grids);
+
+            /** 生成阻挡线段 */
+            this._segments = MapUtils.createSegments(this._mapSize, this._grids);
+
+            /** 生成关键点连通图 */
+            this._graph = MapUtils.createGraphByPoints(this._mapSize, this._points, this._segments);
+        } else {
+            /** 生成网格连通图 */
+            this._graph = MapUtils.createGraphByGrids(this._mapSize, this._grids);
         }
     }
 
     /** 创建用于调试网格的文字集 */
-    createLabels() {
+    loadLabels() {
+        this._labels = [];
+        this.nodeLabels.destroyAllChildren();
+
         if (CC_EDITOR) {
-            this.nodeLabels.destroyAllChildren();
             return;
         }
 
@@ -329,7 +399,6 @@ export default class SceneEditor extends cc.Component {
         var w = this._mapSize.width;
         var h = this._mapSize.height;
         var halfPos = cc.v2(gw/2, gh/2);
-        this._labels = [];
         for(var y = 0; y < h; y++) {
             for(var x = 0; x < w; x++) {
                 var grid = {x: x, y: y};
@@ -349,9 +418,11 @@ export default class SceneEditor extends cc.Component {
     }
 
     /** 创建用于调试网格的方向集 */
-    createArrows() {
+    loadArrows() {
+        this._arrows = [];
+        this.nodeArrows.destroyAllChildren();
+
         if (CC_EDITOR) {
-            this.nodeArrows.destroyAllChildren();
             return;
         }
 
@@ -360,7 +431,6 @@ export default class SceneEditor extends cc.Component {
         var w = this._mapSize.width;
         var h = this._mapSize.height;
         var halfPos = cc.v2(gw/2, gh/2);
-        this._arrows = [];
         for(var y = 0; y < h; y++) {
             for(var x = 0; x < w; x++) {
                 var grid = {x: x, y: y};
@@ -378,17 +448,18 @@ export default class SceneEditor extends cc.Component {
                 this._arrows.push(node);
             }
         }
-        this.nodeArrows.active = this._showVectorMap;
+        this.nodeArrows.active = this._enableVectorMap;
     }
 
     /** 创建移动单位 */
-    createUnits() {
+    loadUnits() {
+        this._units = [];
+        this.nodeUnits.destroyAllChildren();
+
         if (CC_EDITOR) {
-            this.nodeUnits.destroyAllChildren();
             return;
         }
-
-        this._units = [];
+        
         for(var i = 0; i < Config.MaxUnitCount; i++) {
             var node = new cc.Node();
             node.parent = this.nodeUnits;
@@ -402,6 +473,7 @@ export default class SceneEditor extends cc.Component {
         this.nodeUnits.active = this._enableUnits;
     }
 
+    //================================================ utils
     /** 填充网格 */
     fillGrid(graph: cc.Graphics, mapPos: IPos, noBorder?: boolean) {
         var x = mapPos.x * GridW;
@@ -432,6 +504,7 @@ export default class SceneEditor extends cc.Component {
         h -= 2 * GridW/8;
 
         graph.fillRect(x, y, w, h);
+
     }
 
     /** 画线 */
