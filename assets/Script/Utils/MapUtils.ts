@@ -1,4 +1,4 @@
-import { Config, EnumFlagType, IGrid, IPos } from "../Const/Config";
+import { Config, EnumFlagType, EnumOrientation, IGrid, IPos } from "../Const/Config";
 import { MiscUtils } from "./MiscUtils";
 
 var Axis4 = [
@@ -175,7 +175,6 @@ export class MapUtils {
 
     /**
      * 标记关键点
-     *      * 一个点周围八方向有一个或多个不相邻的障碍物
      */
     static createKeypoints(mapSize: cc.Size, map: IGrid[]) {
         MiscUtils.timeRecordStart('createKeypoints');
@@ -206,23 +205,90 @@ export class MapUtils {
                     }
                 }
             }
-
-            if (!existIsolate) {
-            //     /** 剔除相邻节点 */
-            //     for(let i = 0; i < blocks.length; i++) {
-            //         let block_grid = blocks[i];
-            //         let dx = Math.abs(block_grid.x - selected_grid.x);
-            //         let dy = Math.abs(block_grid.y - selected_grid.y);
-            //         if (dx + dy > 1) {
-            //             blocks = [];
-            //             break;
-            //         }
-            //     }
-            }
             
             selected_grid.isKeypoint = existIsolate;
-            // selected_grid.isKeypoint = blocks.length > 0;
         }
         MiscUtils.timeRecordEnd('createKeypoints');
+    }
+
+    /** 生成阻挡线段 */
+    static createSegments(mapSize: cc.Size, map: IGrid[]) {
+        MiscUtils.timeRecordStart('createSegments');
+        let segments = [];
+        let tmpMapPos = {x: 0, y: 0};
+
+        /** 横向 */
+        for(let j = 0; j < mapSize.height; j++) {
+            for(let i = 0; i < mapSize.width; i++) {
+                tmpMapPos.x = i;
+                tmpMapPos.y = j;
+                let seleted_map_index = this.convertMapPosToIndex(mapSize, tmpMapPos);
+                let selected_grid = map[seleted_map_index];
+                selected_grid.tmpUsed = false;
+                
+                if (selected_grid.flag == EnumFlagType.Terrain) {
+                    let start_pos = selected_grid;
+                    let end_pos = selected_grid;
+                    for(let step = i+1; step < mapSize.width; step++, i++) {
+                        tmpMapPos.x = step;
+                        tmpMapPos.y = j;
+                        let step_map_index = this.convertMapPosToIndex(mapSize, tmpMapPos);
+                        let step_grid = map[step_map_index];
+                        if (step_grid.flag == EnumFlagType.Terrain) {
+                            selected_grid.tmpUsed = true;
+                            step_grid.tmpUsed = true;
+                            end_pos = step_grid;
+                        } else {
+                            break;
+                        }
+                    }
+
+                    if (start_pos != end_pos) {
+                        segments.push({
+                            points: [start_pos, end_pos],
+                            orient: EnumOrientation.Horizontal,
+                        });
+                    }
+                }
+            }
+        }
+
+        /** 纵向 */
+        for(let i = 0; i < mapSize.width; i++) {
+            for(let j = 0; j < mapSize.height; j++) {
+                tmpMapPos.x = i;
+                tmpMapPos.y = j;
+                let seleted_map_index = this.convertMapPosToIndex(mapSize, tmpMapPos);
+                let selected_grid = map[seleted_map_index];
+                
+                if (!selected_grid.tmpUsed && selected_grid.flag == EnumFlagType.Terrain) {
+                    let start_pos = selected_grid;
+                    let end_pos = selected_grid;
+                    for(let step = j+1; step < mapSize.height; step++, j++) {
+                        tmpMapPos.y = step;
+                        tmpMapPos.x = i;
+                        let step_map_index = this.convertMapPosToIndex(mapSize, tmpMapPos);
+                        let step_grid = map[step_map_index];
+                        if (step_grid.flag == EnumFlagType.Terrain && !step_grid.tmpUsed) {
+                            selected_grid.tmpUsed = true;
+                            step_grid.tmpUsed = true;
+                            end_pos = step_grid;
+                        } else {
+                            break;
+                        }
+                    }
+
+                    if (start_pos != end_pos) {
+                        segments.push({
+                            points: [start_pos, end_pos],
+                            orient: EnumOrientation.Vertical,
+                        });
+                    }
+                }
+            }
+        }
+        
+        MiscUtils.timeRecordEnd('createSegments');
+        return segments;
     }
 }

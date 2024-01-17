@@ -28,6 +28,9 @@ export interface IGrid {
     cost?: number,
     prev?: IGrid,
     isKeypoint?: boolean,
+
+    /** 部分算法内部的的临时变量 */
+    tmpUsed?: boolean,
 }
 
 export enum EnumFlagType {
@@ -41,4 +44,9 @@ export interface IMoveUnit {
     ended?: boolean,
     dstMapPos?: IPos,
     curMapPos?: IPos,
+}
+
+export enum EnumOrientation {
+    Horizontal,
+    Vertical,
 }

@@ -1,6 +1,6 @@
 import EventMgr from "../Components/EventMgr";
 import KeyboardListener from "../Components/KeyboardListener";
-import { Config, EnumFlagType, Events, IGrid, IMoveUnit, IPos } from "../Const/Config";
+import { Config, EnumFlagType, EnumOrientation, Events, IGrid, IMoveUnit, IPos } from "../Const/Config";
 import { MapUtils } from "../Utils/MapUtils";
 import { MiscUtils } from "../Utils/MiscUtils";
 
@@ -17,6 +17,8 @@ export default class SceneEditor extends cc.Component {
     @property(cc.Graphics) graphGrids: cc.Graphics = null;
     @property(cc.Graphics) graphTarget: cc.Graphics = null;
     @property(cc.Graphics) graphKeypoint: cc.Graphics = null;
+    @property(cc.Graphics) graphSegmentsHori: cc.Graphics = null;
+    @property(cc.Graphics) graphSegmentsVert: cc.Graphics = null;
     @property(cc.Node) nodeLabels: cc.Node = null;
     @property(cc.Node) nodeArrows: cc.Node = null;
     @property(cc.Node) nodeUnits: cc.Node = null;
@@ -262,12 +264,29 @@ export default class SceneEditor extends cc.Component {
      */
     showKeypoints() {
         MapUtils.createKeypoints(this._mapSize, this._grids);
-
         this.graphKeypoint.clear();
         for(var i = 0; i < this._grids.length; i++) {
             var grid = this._grids[i];
             if (grid.isKeypoint) {
                 this.fillGrid(this.graphKeypoint, grid);
+            }
+        }
+
+        let segments = MapUtils.createSegments(this._mapSize, this._grids);
+        this.graphSegmentsHori.clear();
+        this.graphSegmentsVert.clear();
+        for(let i = 0; i < segments.length; i++) {
+            let segment = segments[i];
+            let startPos = segment.points[0];
+            let endPos = segment.points[1];
+            if (segment.orient == EnumOrientation.Horizontal) {
+                for(let x = startPos.x; x <= endPos.x; x++) {
+                    this.fillSegment(this.graphSegmentsHori, startPos, endPos);
+                }
+            } else {
+                for(let y = startPos.y; y <= endPos.y; y++) {
+                    this.fillSegment(this.graphSegmentsVert, startPos, endPos);
+                }
             }
         }
     }
@@ -384,11 +403,47 @@ export default class SceneEditor extends cc.Component {
     }
 
     /** 填充网格 */
-    fillGrid(graph: cc.Graphics, mapPos: IPos) {
+    fillGrid(graph: cc.Graphics, mapPos: IPos, noBorder?: boolean) {
         var x = mapPos.x * GridW;
         var y = mapPos.y * GridH;
+        var w = GridW;
+        var h = GridH;
 
-        graph.fillRect(x, y, GridW, GridH);
+        if (noBorder) {
+            x += GridW/8;
+            y += GridW/8;
+            w -= 2 * GridW/8;
+            h -= 2 * GridW/8;
+        }
+
+        graph.fillRect(x, y, w, h);
+    }
+
+    /** 填充连续网格 */
+    fillSegment(graph: cc.Graphics, startMapPos: IPos, endMapPos: IPos,) {
+        var x = startMapPos.x * GridW;
+        var y = startMapPos.y * GridH;
+        var w = (endMapPos.x - startMapPos.x + 1) * GridW;
+        var h = (endMapPos.y - startMapPos.y + 1) * GridH;
+
+        x += GridW/8;
+        y += GridW/8;
+        w -= 2 * GridW/8;
+        h -= 2 * GridW/8;
+
+        graph.fillRect(x, y, w, h);
+    }
+
+    /** 画线 */
+    strokeLine(graph: cc.Graphics, startMapPos: IPos, endMapPos: IPos) {
+        var sx = startMapPos.x * GridW;
+        var sy = startMapPos.y * GridH;
+        var ex = endMapPos.x * GridW;
+        var ey = endMapPos.y * GridH;
+
+        graph.moveTo(sx, sy);
+        graph.lineTo(ex, ey);
+        graph.stroke();
     }
 }
 cc.macro.CLEANUP_IMAGE_CACHE = true;
