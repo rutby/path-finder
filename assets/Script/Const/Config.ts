@@ -16,6 +16,7 @@ export class Events {
     static Debug_Switch_KeyPoint: string = 'Debug_Switch_keyPoint';
     static Debug_Switch_Index: string = 'Debug_Switch_Index';
     static Debug_Switch_Optmize: string = 'Debug_Switch_Optmize';
+    static Debug_Switch_Help: string = 'Debug_Switch_Help';
 }
 
 //================================================ 

@@ -23,6 +23,7 @@ export default class SceneEditor extends cc.Component {
     @property(cc.Node) nodeArrows: cc.Node = null;
     @property(cc.Node) nodeUnits: cc.Node = null;
     @property(cc.TiledMap) tilemap: cc.TiledMap = null;
+    @property(cc.Node) nodeHelp: cc.Node = null;
 
     _currMapPos: cc.Vec2 = null;
     _labels: cc.Label[] = [];
@@ -38,13 +39,14 @@ export default class SceneEditor extends cc.Component {
     //================================================ cc.Component
     start () {
         //====================== 
-        CC_PREVIEW && this.node.addComponent(KeyboardListener);
+        this.node.addComponent(KeyboardListener);
         EventMgr.sub(Events.Debug_Switch_Profiler, this.onEventSwitchProfiler, this);
         EventMgr.sub(Events.Debug_Switch_Units, this.onEventSwitchUnits, this);
         EventMgr.sub(Events.Debug_Switch_VectorMap, this.onEventSwitchVector, this);
         EventMgr.sub(Events.Debug_Switch_KeyPoint, this.onEventSwitchKeypoint, this);
         EventMgr.sub(Events.Debug_Switch_Index, this.onEventSwitchIndex, this);
         EventMgr.sub(Events.Debug_Switch_Optmize, this.onEventSwitchOptmize, this);
+        EventMgr.sub(Events.Debug_Switch_Help, this.onEventSwitchHelp, this);
 
         //====================== 
         this._mapSize = this.tilemap.getMapSize();
@@ -52,6 +54,9 @@ export default class SceneEditor extends cc.Component {
         this.node.setContentSize(mapViewSize)
         this.nodeMap.position = cc.v3(-mapViewSize.width/2, -mapViewSize.height/2);
         this.nodeUnits.position = cc.v3(GridW/2, GridH/2);
+        if (!CC_EDITOR) {
+            this.nodeHelp.active = false;
+        }
 
         this.node.on(cc.Node.EventType.TOUCH_START, this.onTouchBegan, this);
         this.node.on(cc.Node.EventType.TOUCH_MOVE, this.onTouchMove, this);
@@ -217,6 +222,13 @@ export default class SceneEditor extends cc.Component {
         this.reloadAll();
 
         console.log('[develop] ========', this._enableOptmize? '算法优化已开启': '算法优化已关闭');
+    }
+
+    _showHelp: boolean = false;
+    onEventSwitchHelp() {
+        this._showHelp = !this._showHelp;
+
+        this.nodeHelp.active = this._showHelp;
     }
 
     //================================================ 

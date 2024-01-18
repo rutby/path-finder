@@ -9,39 +9,36 @@ export default class KeyboardListener extends cc.Component {
     
 	//================================================ cc.Component
 	protected start(): void {
-		if (CC_BUILD) return;
-
 		cc.systemEvent.on(cc.SystemEvent.EventType.KEY_DOWN, this.onEventKeyDown, this);
 
 		this._cmdMap = {
             //================================================ 镜头移动
-            ['A'.charCodeAt(0)]: {
-				desc: '镜头左移',
-				func: () => {
-                    
-                    cc.Camera.main.node.x = cc.Camera.main.node.x - Config.GridSize.width;
-				},
-			},
-            ['S'.charCodeAt(0)]: {
-				desc: '镜头下移',
-				func: () => {
-                    cc.Camera.main.node.y = cc.Camera.main.node.y - Config.GridSize.height;
-				},
-			},
-            ['D'.charCodeAt(0)]: {
-				desc: '镜头右移',
-				func: () => {
-                    cc.Camera.main.node.x = cc.Camera.main.node.x + Config.GridSize.width;
-				},
-			},
-            ['W'.charCodeAt(0)]: {
-				desc: '镜头上移',
-				func: () => {
-                    cc.Camera.main.node.y = cc.Camera.main.node.y + Config.GridSize.height;
-				},
-			},
+            // ['A'.charCodeAt(0)]: {
+			// 	desc: '镜头左移',
+			// 	func: () => {
+            //         cc.Camera.main.node.x = cc.Camera.main.node.x - Config.GridSize.width;
+			// 	},
+			// },
+            // ['S'.charCodeAt(0)]: {
+			// 	desc: '镜头下移',
+			// 	func: () => {
+            //         cc.Camera.main.node.y = cc.Camera.main.node.y - Config.GridSize.height;
+			// 	},
+			// },
+            // ['D'.charCodeAt(0)]: {
+			// 	desc: '镜头右移',
+			// 	func: () => {
+            //         cc.Camera.main.node.x = cc.Camera.main.node.x + Config.GridSize.width;
+			// 	},
+			// },
+            // ['W'.charCodeAt(0)]: {
+			// 	desc: '镜头上移',
+			// 	func: () => {
+            //         cc.Camera.main.node.y = cc.Camera.main.node.y + Config.GridSize.height;
+			// 	},
+			// },
 
-            //================================================ 镜头缩放
+            //================================================ 地图
 			['F'.charCodeAt(0)]: {
 				desc: '镜头放大',
 				func: () => {
@@ -54,8 +51,6 @@ export default class KeyboardListener extends cc.Component {
 					cc.Camera.main.zoomRatio = cc.Camera.main.zoomRatio - 0.1;
 				},
 			},
-
-            //================================================ 
             ['R'.charCodeAt(0)]: {
 				desc: '重置地图',
 				func: () => {
@@ -64,6 +59,14 @@ export default class KeyboardListener extends cc.Component {
                     cc.Camera.main.node.y = 0;
 				},
 			},
+            ['H'.charCodeAt(0)]: {
+				desc: '打开帮助',
+				func: () => {
+                    EventMgr.pub(Events.Debug_Switch_Help);
+				},
+			},
+
+            //================================================ 
             ['P'.charCodeAt(0)]: {
 				desc: '切换性能测试',
 				func: () => {
@@ -104,8 +107,6 @@ export default class KeyboardListener extends cc.Component {
 	}
 
 	protected onDestroy(): void {
-		if (CC_BUILD) return;
-
 		cc.systemEvent.off(cc.SystemEvent.EventType.KEY_DOWN, this.onEventKeyDown, this);
 	}
 
