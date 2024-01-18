@@ -23,7 +23,7 @@ var GridWidth = Config.GridSize.width;
 var GridHeight = Config.GridSize.height;
 
 type IGraph = {[key: string]: {[key: string]: number}};
-
+type INearestPoint = {point?: IGrid, cost?: number};
 export class MapUtils {
     //================================================ utils
     /** UI坐标转换成格子坐标 */
@@ -104,10 +104,34 @@ export class MapUtils {
         return false;
     }
 
+    /** 获得最近的临近关键点 */
+    static getNearestPoint(selected_grid: IGrid, result: INearestPoint) {
+        let min_cost = null;
+        let nearest_grid = null;
+        let near_points = selected_grid.nearPoints;
+        let near_points_dis_cache = selected_grid.nearPointsDisCache;
+        for(let j = 0; j < near_points.length; j++) {
+            let near_grid = near_points[j];
+            let near_cost = near_points_dis_cache[j];
+            let total_cost = near_grid.cost + near_cost
+            if (min_cost == null || total_cost < min_cost) {
+                min_cost = total_cost;
+                nearest_grid = near_grid;
+            }
+        }
+        if (min_cost == null) {
+            cc.warn('min_cost is null', selected_grid.index);
+            min_cost = -1;
+        }
+
+        result.point = nearest_grid;
+        result.cost = min_cost;
+    }
+
     //================================================ 寻路通用逻辑
     /** 生成热力图 */
     static createHeatMap(mapSize: cc.Size, graph: IGraph, map: IGrid[], targetPos: cc.Vec2) {
-        MiscUtils.timeRecordStart('createHeatMap');
+        // MiscUtils.timeRecordStart('createHeatMap');
         var open_list: INode[] = [];
         var close_list: INode[] = [];
 
@@ -164,11 +188,12 @@ export class MapUtils {
                 }
             }
         }
-        MiscUtils.timeRecordEnd('createHeatMap');
+        // MiscUtils.timeRecordEnd('createHeatMap');
     }
 
     static createFullHeatMap(mapSize: cc.Size, map: IGrid[], segments: ISegment[], targetPos: cc.Vec2) {
         let rects = this.segments2rect(segments);
+        let result: INearestPoint = {};
 
         for(let i = 0; i < map.length; i++) {
             let selected_grid = map[i];
@@ -185,24 +210,12 @@ export class MapUtils {
             if (this.isConnect(rects, selected_grid, targetPos)) {
                 selected_grid.cost = this.getGridDis(selected_grid, targetPos);
             } else {
-                let min_cost = null;
-                let nearest_grid = null;
-                let near_points = selected_grid.nearPoints;
-                let near_points_dis_cache = selected_grid.nearPointsDisCache;
-                for(let j = 0; j < near_points.length; j++) {
-                    let near_grid = near_points[j];
-                    let near_cost = near_points_dis_cache[j];
-                    let total_cost = near_grid.cost + near_cost
-                    if (min_cost == null || total_cost < min_cost) {
-                        min_cost = total_cost;
-                        nearest_grid = near_grid;
-                    }
+                this.getNearestPoint(selected_grid, result);
+                if (result.cost != null) {
+                    selected_grid.cost = result.cost;
+                } else {
+                    cc.warn("can't find nearest point", selected_grid.index);
                 }
-                if (min_cost == null) {
-                    cc.warn('min_cost is null', selected_grid.index);
-                    min_cost = -1;
-                }
-                selected_grid.cost = min_cost;
             }
         }
     }
@@ -288,13 +301,23 @@ export class MapUtils {
 
     /** 生成向量图 */
     static createVectorMap(mapSize: cc.Size, graph: IGraph, map: IGrid[]) {
+        let result: INearestPoint = {};
+
         for(let i = 0; i < map.length; i++) {
             var selected_grid = map[i];
             selected_grid.prev = null;
+
+            /** 排除地形 */
             if (selected_grid.flag == EnumFlagType.Terrain) {
                 continue;
             }
+
+            /** 排除目标点 */
+            if (selected_grid.cost == 0) {
+                continue;
+            }
             
+            /** 优先处理关键点 */
             var neighbors = graph[selected_grid.index];
             var prev_grid = selected_grid;
             for(var key in neighbors) {
@@ -317,6 +340,16 @@ export class MapUtils {
                 }
             }
 
+            /** 非关键点网格 */
+            if (prev_grid == selected_grid) {
+                this.getNearestPoint(selected_grid, result);
+                if (result.point != null) {
+                    prev_grid = result.point;
+                } else {
+                    cc.warn("can't find nearest point", selected_grid.index);
+                }
+            }
+
             if (prev_grid != selected_grid) {
                 selected_grid.prev = prev_grid;
             }
@@ -325,7 +358,7 @@ export class MapUtils {
 
     /** 通过网格四方向, 生成连通图 */
     static createGraphByGrids(mapSize: cc.Size, map: IGrid[]): {[key: string]: {[key: string]: number}} {
-        MiscUtils.timeRecordStart('createGraphByGrids');
+        // MiscUtils.timeRecordStart('createGraphByGrids');
         let graph: {[key: string]: {[key: string]: number}} = {};
         for(let i = 0; i < map.length; i++) {
             let nest = {}
@@ -355,15 +388,13 @@ export class MapUtils {
             }
             graph[selected_index] = nest;
         }
-        MiscUtils.timeRecordEnd('createGraphByGrids');
+        // MiscUtils.timeRecordEnd('createGraphByGrids');
         return graph;
     }
 
     /** 通过点&线段, 生成连通图 */
     static createGraphByPoints(mapSize: cc.Size, points: IGrid[], segments: ISegment[], map: IGrid[]): IGraph {
-        MiscUtils.timeRecordStart('createGraphByPoints');
-        console.log('[develop] ========', 'points.length', points.length);
-        console.log('[develop] ========', 'segments.length', segments.length);
+        // MiscUtils.timeRecordStart('createGraphByPoints');
         let graph = {};
         let rects = this.segments2rect(segments);
         
@@ -401,14 +432,14 @@ export class MapUtils {
             selected_grid.nearPointsDisCache = near_points_dis_cache;
         }
 
-        MiscUtils.timeRecordEnd('createGraphByPoints');
+        // MiscUtils.timeRecordEnd('createGraphByPoints');
         return graph;
     }
 
     //================================================ 控制点寻路特有
     /** 生成关键点 */
     static createKeypoints(mapSize: cc.Size, map: IGrid[]): IGrid[] {
-        MiscUtils.timeRecordStart('createKeypoints');
+        // MiscUtils.timeRecordStart('createKeypoints');
         let points = [];
         for(let i = 0; i < map.length; i++) {
             let blocks: IGrid[] = [];
@@ -442,13 +473,13 @@ export class MapUtils {
                 points.push(selected_grid);
             }
         }
-        MiscUtils.timeRecordEnd('createKeypoints');
+        // MiscUtils.timeRecordEnd('createKeypoints');
         return points;
     }
 
     /** 生成阻挡线段 */
     static createSegments(mapSize: cc.Size, map: IGrid[]): ISegment[] {
-        MiscUtils.timeRecordStart('createSegments');
+        // MiscUtils.timeRecordStart('createSegments');
         let segments = [];
         let tmpMapPos = {x: 0, y: 0};
 
@@ -523,7 +554,7 @@ export class MapUtils {
             }
         }
         
-        MiscUtils.timeRecordEnd('createSegments');
+        // MiscUtils.timeRecordEnd('createSegments');
         return segments;
     }
 
