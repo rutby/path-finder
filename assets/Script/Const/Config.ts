@@ -31,6 +31,8 @@ export interface IGrid {
     flag: number,
     cost?: number,
     prev?: IGrid,
+    /** 是否是关键点 */
+    isKeyPoint?: boolean,
     /** 临近关键点 */
     nearPoints?: IGrid[],
     /** 临近关键点距离 */

@@ -108,7 +108,7 @@ export class MapUtils {
     static getNearestPoint(selected_grid: IGrid, result: INearestPoint) {
         let min_cost = null;
         let nearest_grid = null;
-        let near_points = selected_grid.nearPoints;
+        let near_points = selected_grid.nearPoints || [];
         let near_points_dis_cache = selected_grid.nearPointsDisCache;
         for(let j = 0; j < near_points.length; j++) {
             let near_grid = near_points[j];
@@ -135,8 +135,10 @@ export class MapUtils {
         var open_list: INode[] = [];
         var close_list: INode[] = [];
 
+        /** 重置地图状态 */
         map.forEach(element => {
             element.cost = -1;
+            element.prev = null;
         });
 
         var target_index = this.convertMapPosToIndex(mapSize, targetPos);
@@ -471,6 +473,7 @@ export class MapUtils {
             
             if (existIsolate) {
                 points.push(selected_grid);
+                selected_grid.isKeyPoint = true;
             }
         }
         // MiscUtils.timeRecordEnd('createKeypoints');
@@ -563,70 +566,54 @@ export class MapUtils {
         let point0 = newPoint;
         for(let j = 0; j < points.length; j++) {
             let point1 = points[j];
-            let mapIndex0 = this.convertMapPosToIndex(mapSize, point0);
-            let mapIndex1 = this.convertMapPosToIndex(mapSize, point1);
 
-            /** 转换成网格中心点 */
-            let pCenter0 = cc.v2(point0.x + 0.5, point0.y + 0.5);
-            let pCenter1 = cc.v2(point1.x + 0.5, point1.y + 0.5);
-
-            let isConnected = true;
-            for(let m = 0; m < rects.length; m++) {
-                let rect = rects[m];
-                let isIntersection = MiscUtils.intersectionLineRect(pCenter0, pCenter1, rect);
-                // console.log('[develop] ========', `${mapIndex0}-${mapIndex1}-${m}`, isIntersection);
-                if (!isIntersection) {
-                    /** 中心点连接判定成功后, 进行四角判定 */
-                    let offset = 0.4;
-                    let x0 = pCenter0.x;
-                    let y0 = pCenter0.y;
-                    let x1 = pCenter1.x;
-                    let y1 = pCenter1.y;
-                    let corners0 = [cc.v2(x0+offset, y0+offset), cc.v2(x0+offset, y0-offset), cc.v2(x0-offset, y0-offset), cc.v2(x0-offset, y0+offset)];
-                    let corners1 = [cc.v2(x1+offset, y1+offset), cc.v2(x1+offset, y1-offset), cc.v2(x1-offset, y1-offset), cc.v2(x1-offset, y1+offset)];
-                    for(let n = 1; n < 4; n++) {
-                        let corner0 = corners0[n];
-                        let corner1 = corners1[n];
-                        let isSubIntersection = MiscUtils.intersectionLineRect(corner0, corner1, rect);
-                        if (isSubIntersection) {
-                            // console.log('[develop] ========', '4corner intersection failed');
-                            isIntersection = true;
-                            break;
-                        }
-                    }
-                }
-                if (isIntersection) {
-                    isConnected = false;
-                    break;
-                }
-            }
-
-            if (isConnected) {
-                let dis = this.getGridDis(pCenter0, pCenter1);
-                graph[mapIndex0] = graph[mapIndex0] || {};
-                graph[mapIndex0][mapIndex1] = dis;
-                graph[mapIndex1] = graph[mapIndex1] || {};
-                graph[mapIndex1][mapIndex0] = dis;
+            if (this.isConnect(rects, point0, point1)) {
+                let map_index0 = this.convertMapPosToIndex(mapSize, point0);
+                let map_index1 = this.convertMapPosToIndex(mapSize, point1);
+                let dis = this.getGridDis(point0, point1);
+                graph[map_index0] = graph[map_index0] || {};
+                graph[map_index0][map_index1] = dis;
+                graph[map_index1] = graph[map_index1] || {};
+                graph[map_index1][map_index0] = dis;
             }
         }
         return graph;
     }
 
     /** 添加图元 */
-    static addGraphElement(mapSize: cc.Size, graph: IGraph, points: IGrid[], segments: ISegment[], newPoint: IPos) {
+    static addGraphElement(mapSize: cc.Size, graph: IGraph, map: IGrid[], points: IGrid[], segments: ISegment[], newPoint: IPos) {
+        if (!newPoint) {
+            return;
+        }
+
+        let new_index = this.convertMapPosToIndex(mapSize, newPoint);
+        let new_grid = map[new_index];
+        /** 排除关键点 */
+        if (new_grid.isKeyPoint) {
+            return;
+        }
+
         let rects = this.segments2rect(segments);
         this.updateGraphPoint(mapSize, graph, points, rects, newPoint);
     }
 
     /** 删除图元 */
-    static delGraphElement(mapSize: cc.Size, graph: IGraph, delPoint: IPos) {
-        if (delPoint) {
-            let delIndex = this.convertMapPosToIndex(mapSize, delPoint);
-            delete graph[delIndex];
-            for(let key in graph) {
-                let connectList = graph[key];
-                delete connectList[delIndex];
-            }
+    static delGraphElement(mapSize: cc.Size, graph: IGraph, map: IGrid[], delPoint: IPos) {
+        if (!delPoint) {
+            return;
+        }
+
+        let del_index = this.convertMapPosToIndex(mapSize, delPoint);
+        let del_grid = map[del_index];
+        /** 排除关键点 */
+        if (del_grid.isKeyPoint) {
+            return;
+        }
+
+        delete graph[del_index];
+        for(let key in graph) {
+            let neighbors = graph[key];
+            delete neighbors[del_index];
         }
     }
 }

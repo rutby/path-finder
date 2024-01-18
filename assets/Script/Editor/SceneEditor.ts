@@ -24,7 +24,6 @@ export default class SceneEditor extends cc.Component {
     @property(cc.Node) nodeUnits: cc.Node = null;
     @property(cc.TiledMap) tilemap: cc.TiledMap = null;
 
-    _posTouchBegan: cc.Vec2 = null;
     _currMapPos: cc.Vec2 = null;
     _labels: cc.Label[] = [];
     _arrows: cc.Node[] = [];
@@ -55,6 +54,7 @@ export default class SceneEditor extends cc.Component {
         this.nodeUnits.position = cc.v3(GridW/2, GridH/2);
 
         this.node.on(cc.Node.EventType.TOUCH_START, this.onTouchBegan, this);
+        this.node.on(cc.Node.EventType.TOUCH_MOVE, this.onTouchMove, this);
         this.node.on(cc.Node.EventType.TOUCH_END, this.onTouchEnded, this);
 
         //====================== 
@@ -69,12 +69,9 @@ export default class SceneEditor extends cc.Component {
 
     protected update(dt: number): void {
         if (this._enableProfiler) {
-            var x = MiscUtils.randomRangeInt(0, 49);
-            var y = MiscUtils.randomRangeInt(0, 49);
-            // this._currMapPos = cc.v2(x, y);
-            let mapPos = MapUtils.convertIndexToMapPos(this._mapSize, 1242);
-            this._currMapPos = cc.v2(mapPos.x, mapPos.y);
-            this.showHeatMap(false);
+            let x = MiscUtils.randomRangeInt(0, cc.winSize.width);
+            let y = MiscUtils.randomRangeInt(0, cc.winSize.height);
+            this.selectTarget(cc.v2(x, y));
         }
 
         if (this._enableUnits) {
@@ -98,21 +95,21 @@ export default class SceneEditor extends cc.Component {
                     } else {
                         unit.ended = true;
                     }
-                } else {
-                    var curVec2 = cc.v2(unit.curMapPos.x, unit.curMapPos.y);
-                    var dstVec2 = cc.v2(unit.dstMapPos.x, unit.dstMapPos.y);
-                    let disTotal = dstVec2.sub(curVec2).mag();
-                    let percent = 1;
-                    if (disTotal > 0.0001) {
-                        //@todo(chentao)
-                        percent = cc.misc.clamp01(disStep / disTotal);
-                    }
-                    unit.curMapPos = curVec2.lerp(dstVec2, percent);
-                    unit.node.setPosition(MapUtils.convertMapPosToViewPos(unit.curMapPos));
+                }
 
-                    if (percent == 1) {
-                        unit.isArrived = true;
-                    }
+                var curVec2 = cc.v2(unit.curMapPos.x, unit.curMapPos.y);
+                var dstVec2 = cc.v2(unit.dstMapPos.x, unit.dstMapPos.y);
+                let disTotal = dstVec2.sub(curVec2).mag();
+                let percent = 1;
+                if (disTotal > 0.0001) {
+                    //@todo(chentao)
+                    percent = cc.misc.clamp01(disStep / disTotal);
+                }
+                unit.curMapPos = curVec2.lerp(dstVec2, percent);
+                unit.node.setPosition(MapUtils.convertMapPosToViewPos(unit.curMapPos));
+
+                if (percent == 1) {
+                    unit.isArrived = true;
                 }
             }
         }
@@ -144,7 +141,7 @@ export default class SceneEditor extends cc.Component {
     onEventSwitchProfiler() {
         this._enableProfiler = !this._enableProfiler;
 
-        console.log('[develop] ========', this._enableProfiler? '性能测试已开启': '性能测试已关闭');
+        console.log('[develop] ========', this._enableProfiler? '性能测试已开启, 移步至Performance中查看开销': '性能测试已关闭');
     }
 
     _enableUnits: boolean = false;
@@ -225,18 +222,37 @@ export default class SceneEditor extends cc.Component {
     //================================================ 
     onTouchBegan(event: cc.Event.EventTouch) {
         var touch = event.touch;
-        this._posTouchBegan = touch.getLocation();
+        var posWorld = touch.getLocation();
+
+        this.selectTarget(posWorld);
+    }
+
+    onTouchMove(event: cc.Event.EventTouch) {
+        var touch = event.touch;
+        var posWorld = touch.getLocation();
+
+        this.selectTarget(posWorld);
     }
 
     onTouchEnded(event: cc.Event.EventTouch) {
         var touch = event.touch;
         var posWorld = touch.getLocation();
-        if (posWorld.sub(this._posTouchBegan).mag() > 1) {
+    }
+
+    selectTarget(posWorld: cc.Vec2) {
+        var posLocal = this.graphGrids.node.convertToNodeSpaceAR(posWorld);
+        var posLogic = MapUtils.convertViewPosToMapPos(posLocal);
+
+        /** 排除地形 */
+        let target_index = MapUtils.convertMapPosToIndex(this._mapSize, posLogic);
+        let target_grid = this._grids[target_index];
+        if (target_grid.flag == EnumFlagType.Terrain) {
             return;
         }
 
-        var posLocal = this.graphGrids.node.convertToNodeSpaceAR(posWorld);
-        var posLogic = MapUtils.convertViewPosToMapPos(posLocal);
+        if (this._currMapPos && this._currMapPos.equals(posLogic)) {
+            return;
+        }
 
         this._currMapPos = posLogic;
         this.showTarget();
@@ -287,8 +303,8 @@ export default class SceneEditor extends cc.Component {
     showHeatMap(detail?: boolean) {
         // MiscUtils.timeRecordStart('showHeatMap');
         if (this._enableOptmize) {
-            MapUtils.delGraphElement(this._mapSize, this._graph, this._lastMapPos);
-            MapUtils.addGraphElement(this._mapSize, this._graph, this._points, this._segments, this._currMapPos);
+            MapUtils.delGraphElement(this._mapSize, this._graph, this._grids, this._lastMapPos);
+            MapUtils.addGraphElement(this._mapSize, this._graph, this._grids, this._points, this._segments, this._currMapPos);
         }
         MapUtils.createHeatMap(this._mapSize, this._graph, this._grids, this._currMapPos);
         if (this._enableOptmize) {
@@ -324,6 +340,7 @@ export default class SceneEditor extends cc.Component {
         for(var i = 0; i < this._units.length; i++) {
             var unit = this._units[i];
             unit.ended = false;
+            unit.isArrived = true;
         }
 
         this._lastMapPos = this._currMapPos;
