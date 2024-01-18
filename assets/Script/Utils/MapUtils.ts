@@ -167,6 +167,61 @@ export class MapUtils {
         MiscUtils.timeRecordEnd('createHeatMap');
     }
 
+    static createFullHeatMap(mapSize: cc.Size, map: IGrid[], segments: ISegment[], targetPos: cc.Vec2) {
+        let rects = this.segments2rect(segments);
+
+        for(let i = 0; i < map.length; i++) {
+            let selected_grid = map[i];
+            if (selected_grid.flag == EnumFlagType.Terrain) {
+                continue;
+            }
+
+            if (selected_grid.cost == -1) {
+                /** 先看能不能直接到目标 */
+                if (this.isConnect(rects, selected_grid, targetPos)) {
+                    selected_grid.cost = this.getGridDis(selected_grid, targetPos);
+                    // break;
+                }
+            }
+        }
+    }
+
+    static isConnect(rects: cc.Rect[], pos0: IPos, pos1: IPos) {
+        /** 转换成网格中心点 */
+        let pCenter0 = cc.v2(pos0.x + 0.5, pos0.y + 0.5);
+        let pCenter1 = cc.v2(pos1.x + 0.5, pos1.y + 0.5);
+
+        let isConnected = true;
+        for(let m = 0; m < rects.length; m++) {
+            let rect = rects[m];
+            let isIntersection = MiscUtils.intersectionLineRect(pCenter0, pCenter1, rect);
+            if (!isIntersection) {
+                /** 中心点连接判定成功后, 进行四角判定 */
+                let offset = 0.4;
+                let x0 = pCenter0.x;
+                let y0 = pCenter0.y;
+                let x1 = pCenter1.x;
+                let y1 = pCenter1.y;
+                let corners0 = [cc.v2(x0+offset, y0+offset), cc.v2(x0+offset, y0-offset), cc.v2(x0-offset, y0-offset), cc.v2(x0-offset, y0+offset)];
+                let corners1 = [cc.v2(x1+offset, y1+offset), cc.v2(x1+offset, y1-offset), cc.v2(x1-offset, y1-offset), cc.v2(x1-offset, y1+offset)];
+                for(let n = 1; n < 4; n++) {
+                    let corner0 = corners0[n];
+                    let corner1 = corners1[n];
+                    let isSubIntersection = MiscUtils.intersectionLineRect(corner0, corner1, rect);
+                    if (isSubIntersection) {
+                        isIntersection = true;
+                        break;
+                    }
+                }
+            }
+            if (isIntersection) {
+                isConnected = false;
+                break;
+            }
+        }
+        return isConnected;
+    }
+
     /** 生成向量图 */
     static createVectorMap(mapSize: cc.Size, graph: IGraph, map: IGrid[]) {
         for(let i = 0; i < map.length; i++) {
@@ -394,7 +449,7 @@ export class MapUtils {
             let isConnected = true;
             for(let m = 0; m < rects.length; m++) {
                 let rect = rects[m];
-                let isIntersection = cc.Intersection.lineRect(pCenter0, pCenter1, rect);
+                let isIntersection = MiscUtils.intersectionLineRect(pCenter0, pCenter1, rect);
                 // console.log('[develop] ========', `${mapIndex0}-${mapIndex1}-${m}`, isIntersection);
                 if (!isIntersection) {
                     /** 中心点连接判定成功后, 进行四角判定 */
@@ -408,7 +463,7 @@ export class MapUtils {
                     for(let n = 1; n < 4; n++) {
                         let corner0 = corners0[n];
                         let corner1 = corners1[n];
-                        let isSubIntersection = cc.Intersection.lineRect(corner0, corner1, rect);
+                        let isSubIntersection = MiscUtils.intersectionLineRect(corner0, corner1, rect);
                         if (isSubIntersection) {
                             // console.log('[develop] ========', '4corner intersection failed');
                             isIntersection = true;

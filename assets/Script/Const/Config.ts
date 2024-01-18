@@ -6,7 +6,7 @@ export class Config {
     //====================== Map
     static GridSize: cc.Size = cc.size(32, 32);
     static MaxUnitCount: number = 30;
-    static EnableOptimize: boolean = false;
+    static EnableOptimize: boolean = true;
 }
 
 export class Events {

@@ -72,7 +72,7 @@ export default class SceneEditor extends cc.Component {
             var x = MiscUtils.randomRangeInt(0, 49);
             var y = MiscUtils.randomRangeInt(0, 49);
             this._currMapPos = cc.v2(x, y);
-            this.showHeatMap(true);
+            this.showHeatMap(false);
         }
 
         if (this._enableUnits) {
@@ -271,11 +271,15 @@ export default class SceneEditor extends cc.Component {
      * 绘制热力图
      */
     showHeatMap(detail?: boolean) {
+        // MiscUtils.timeRecordStart('showHeatMap');
         if (this._enableOptmize) {
             MapUtils.delGraphElement(this._mapSize, this._graph, this._lastMapPos);
             MapUtils.addGraphElement(this._mapSize, this._graph, this._points, this._segments, this._currMapPos);
         }
         MapUtils.createHeatMap(this._mapSize, this._graph, this._grids, this._currMapPos);
+        if (this._enableOptmize) {
+            MapUtils.createFullHeatMap(this._mapSize, this._grids, this._segments, this._currMapPos);
+        }
 
         /** 显示网格代价 */
         if (detail) {
@@ -309,6 +313,7 @@ export default class SceneEditor extends cc.Component {
         }
 
         this._lastMapPos = this._currMapPos;
+        // MiscUtils.timeRecordEnd('showHeatMap');
     }
 
     /** 绘制关键点 */
