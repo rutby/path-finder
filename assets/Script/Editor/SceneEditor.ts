@@ -71,7 +71,9 @@ export default class SceneEditor extends cc.Component {
         if (this._enableProfiler) {
             var x = MiscUtils.randomRangeInt(0, 49);
             var y = MiscUtils.randomRangeInt(0, 49);
-            this._currMapPos = cc.v2(x, y);
+            // this._currMapPos = cc.v2(x, y);
+            let mapPos = MapUtils.convertIndexToMapPos(this._mapSize, 1242);
+            this._currMapPos = cc.v2(mapPos.x, mapPos.y);
             this.showHeatMap(false);
         }
 

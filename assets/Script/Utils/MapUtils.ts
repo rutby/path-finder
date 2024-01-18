@@ -186,27 +186,70 @@ export class MapUtils {
         }
     }
 
+    private static _posCenter0: IPos = {x: 0, y: 0};
+    private static _posCenter1: IPos = {x: 0, y: 0};
+    private static _posCorners0: IPos[] = [{x: 0, y: 0}, {x: 0, y: 0}, {x: 0, y: 0}, {x: 0, y: 0}];
+    private static _posCorners1: IPos[] = [{x: 0, y: 0}, {x: 0, y: 0}, {x: 0, y: 0}, {x: 0, y: 0}];
+    /** 两点之间是否连通 */
     static isConnect(rects: cc.Rect[], pos0: IPos, pos1: IPos) {
         /** 转换成网格中心点 */
-        let pCenter0 = cc.v2(pos0.x + 0.5, pos0.y + 0.5);
-        let pCenter1 = cc.v2(pos1.x + 0.5, pos1.y + 0.5);
+        this._posCenter0.x = pos0.x + 0.5;
+        this._posCenter0.y = pos0.y + 0.5;
+        this._posCenter1.x = pos1.x + 0.5;
+        this._posCenter1.y = pos1.y + 0.5;
 
         let isConnected = true;
         for(let m = 0; m < rects.length; m++) {
             let rect = rects[m];
-            let isIntersection = MiscUtils.intersectionLineRect(pCenter0, pCenter1, rect);
+
+            /** 筛选 */
+            let minx = Math.min(this._posCenter0.x, this._posCenter1.x);
+            if (rect.xMax < minx) {
+                continue;
+            }
+            let maxx = Math.max(this._posCenter0.x, this._posCenter1.x);
+            if (rect.x > maxx) {
+                continue;
+            }
+            let miny = Math.min(this._posCenter0.y, this._posCenter1.y);
+            if (rect.yMax < miny) {
+                continue;
+            }
+            let maxy = Math.max(this._posCenter0.y, this._posCenter1.y);
+            if (rect.y > maxy) {
+                continue;
+            }
+
+            let isIntersection = MiscUtils.intersectionLineRect(this._posCenter0, this._posCenter1, rect);
             if (!isIntersection) {
                 /** 中心点连接判定成功后, 进行四角判定 */
                 let offset = 0.4;
-                let x0 = pCenter0.x;
-                let y0 = pCenter0.y;
-                let x1 = pCenter1.x;
-                let y1 = pCenter1.y;
-                let corners0 = [cc.v2(x0+offset, y0+offset), cc.v2(x0+offset, y0-offset), cc.v2(x0-offset, y0-offset), cc.v2(x0-offset, y0+offset)];
-                let corners1 = [cc.v2(x1+offset, y1+offset), cc.v2(x1+offset, y1-offset), cc.v2(x1-offset, y1-offset), cc.v2(x1-offset, y1+offset)];
+                let x0 = this._posCenter0.x;
+                let y0 = this._posCenter0.y;
+                let x1 = this._posCenter1.x;
+                let y1 = this._posCenter1.y;
+
+                this._posCorners0[0].x = x0+offset;
+                this._posCorners0[0].y = y0+offset;
+                this._posCorners0[1].x = x0+offset;
+                this._posCorners0[1].y = y0-offset;
+                this._posCorners0[2].x = x0-offset;
+                this._posCorners0[2].y = y0-offset;
+                this._posCorners0[3].x = x0-offset;
+                this._posCorners0[3].y = y0+offset;
+
+                this._posCorners1[0].x = x1+offset;
+                this._posCorners1[0].y = y1+offset;
+                this._posCorners1[1].x = x1+offset;
+                this._posCorners1[1].y = y1-offset;
+                this._posCorners1[2].x = x1-offset;
+                this._posCorners1[2].y = y1-offset;
+                this._posCorners1[3].x = x1-offset;
+                this._posCorners1[3].y = y1+offset;
+                
                 for(let n = 1; n < 4; n++) {
-                    let corner0 = corners0[n];
-                    let corner1 = corners1[n];
+                    let corner0 = this._posCorners0[n];
+                    let corner1 = this._posCorners1[n];
                     let isSubIntersection = MiscUtils.intersectionLineRect(corner0, corner1, rect);
                     if (isSubIntersection) {
                         isIntersection = true;
