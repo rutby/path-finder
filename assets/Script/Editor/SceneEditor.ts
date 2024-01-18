@@ -143,6 +143,8 @@ export default class SceneEditor extends cc.Component {
     _enableProfiler: boolean = false;
     onEventSwitchProfiler() {
         this._enableProfiler = !this._enableProfiler;
+
+        console.log('[develop] ========', this._enableProfiler? '性能测试已开启': '性能测试已关闭');
     }
 
     _enableUnits: boolean = false;
@@ -172,12 +174,16 @@ export default class SceneEditor extends cc.Component {
                 unit.isArrived = true;
             }
         }
+
+        console.log('[develop] ========', this._enableUnits? '移动单位已生成': '移动单位已移除');
     }
 
     _enableVectorMap: boolean = false;
     onEventSwitchVector() {
         this._enableVectorMap = !this._enableVectorMap;
         this.nodeArrows.active = this._enableVectorMap;
+
+        console.log('[develop] ========', this._enableVectorMap? '向量图预览已开启': '向量图预览已关闭');
     }
 
     _enableKeypoint: boolean = false;
@@ -188,6 +194,8 @@ export default class SceneEditor extends cc.Component {
         if (this._enableKeypoint) {
             this.showKeypoints();
         }
+
+        console.log('[develop] ========', this._enableKeypoint? '关键点预览已开启': '关键点预览已关闭');
     }
 
     _enableIndex: boolean = false;
@@ -200,6 +208,8 @@ export default class SceneEditor extends cc.Component {
             this._labels[i].string = this._enableIndex? `${index}`: '';
             this._labels[i].node.scale = this._enableIndex? 0.33: 1;
         }
+
+        console.log('[develop] ========', this._enableIndex? '索引预览已开启': '索引预览已关闭');
     }
 
     _enableOptmize: boolean = Config.EnableOptimize;
@@ -208,6 +218,8 @@ export default class SceneEditor extends cc.Component {
 
         this.clearAll();
         this.reloadAll();
+
+        console.log('[develop] ========', this._enableOptmize? '算法优化已开启': '算法优化已关闭');
     }
 
     //================================================ 
@@ -385,7 +397,7 @@ export default class SceneEditor extends cc.Component {
             this._segments = MapUtils.createSegments(this._mapSize, this._grids);
 
             /** 生成关键点连通图 */
-            this._graph = MapUtils.createGraphByPoints(this._mapSize, this._points, this._segments);
+            this._graph = MapUtils.createGraphByPoints(this._mapSize, this._points, this._segments, this._grids);
         } else {
             /** 生成网格连通图 */
             this._graph = MapUtils.createGraphByGrids(this._mapSize, this._grids);

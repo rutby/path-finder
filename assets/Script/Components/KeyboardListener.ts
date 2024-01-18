@@ -115,8 +115,8 @@ export default class KeyboardListener extends cc.Component {
         var keyCode = event.keyCode;
         
         if (this._cmdMap[keyCode]) {
-			this._cmdMap[keyCode].func.apply(this);
             console.log('[develop] ========', '按键监听已触发:', this._cmdMap[keyCode].desc);
+			this._cmdMap[keyCode].func.apply(this);
         }
     }
 }

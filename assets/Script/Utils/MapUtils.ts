@@ -139,7 +139,7 @@ export class MapUtils {
             /** 获得周边邻居 */
             var neighbors = graph[selected_index];
             if (!neighbors || neighbors.length) {
-                cc.warn('neighbors status is wrong');
+                cc.warn('neighbors status is wrong', selected_index);
                 neighbors = {};
             }
             for(var key in neighbors) {
@@ -172,16 +172,37 @@ export class MapUtils {
 
         for(let i = 0; i < map.length; i++) {
             let selected_grid = map[i];
+            /** 排除地形 */
             if (selected_grid.flag == EnumFlagType.Terrain) {
                 continue;
             }
+            /** 排除已生成路径 */
+            if (selected_grid.cost >= 0) {
+                continue;
+            }
 
-            if (selected_grid.cost == -1) {
-                /** 先看能不能直接到目标 */
-                if (this.isConnect(rects, selected_grid, targetPos)) {
-                    selected_grid.cost = this.getGridDis(selected_grid, targetPos);
-                    // break;
+            /** 先看能不能直接到目标 */
+            if (this.isConnect(rects, selected_grid, targetPos)) {
+                selected_grid.cost = this.getGridDis(selected_grid, targetPos);
+            } else {
+                let min_cost = null;
+                let nearest_grid = null;
+                let near_points = selected_grid.nearPoints;
+                let near_points_dis_cache = selected_grid.nearPointsDisCache;
+                for(let j = 0; j < near_points.length; j++) {
+                    let near_grid = near_points[j];
+                    let near_cost = near_points_dis_cache[j];
+                    let total_cost = near_grid.cost + near_cost
+                    if (min_cost == null || total_cost < min_cost) {
+                        min_cost = total_cost;
+                        nearest_grid = near_grid;
+                    }
                 }
+                if (min_cost == null) {
+                    cc.warn('min_cost is null', selected_grid.index);
+                    min_cost = -1;
+                }
+                selected_grid.cost = min_cost;
             }
         }
     }
@@ -339,15 +360,45 @@ export class MapUtils {
     }
 
     /** 通过点&线段, 生成连通图 */
-    static createGraphByPoints(mapSize: cc.Size, points: IGrid[], segments: ISegment[]): IGraph {
+    static createGraphByPoints(mapSize: cc.Size, points: IGrid[], segments: ISegment[], map: IGrid[]): IGraph {
         MiscUtils.timeRecordStart('createGraphByPoints');
         console.log('[develop] ========', 'points.length', points.length);
         console.log('[develop] ========', 'segments.length', segments.length);
         let graph = {};
         let rects = this.segments2rect(segments);
         
+        /** 关键点加入图 */
         for(let i = 0; i < points.length; i++) {
             this.updateGraphPoint(mapSize, graph, points, rects, points[i]);
+        }
+
+        /** 网格点记录连通点 */
+        for(let i = 0; i < map.length; i++) {
+            let selected_grid = map[i];
+            /** 排除地形 */
+            if (selected_grid.flag == EnumFlagType.Terrain) {
+                continue;
+            }
+            /** 排除关键点 */
+            let selected_index = this.convertMapPosToIndex(mapSize, selected_grid);
+            if (graph[selected_index]) {
+                continue;
+            }
+
+            let near_points = [];
+            let near_points_dis_cache = [];
+            for(let j = 0; j < points.length; j++) {
+                let point_grid = points[j];
+                if (this.isConnect(rects, selected_grid, point_grid)) {
+                    near_points.push(point_grid);
+                    near_points_dis_cache.push(this.getGridDis(selected_grid, point_grid));
+                }
+            }
+            if (near_points.length == 0) {
+                cc.warn('#near_points = 0', selected_index);
+            }
+            selected_grid.nearPoints = near_points;
+            selected_grid.nearPointsDisCache = near_points_dis_cache;
         }
 
         MiscUtils.timeRecordEnd('createGraphByPoints');
@@ -387,7 +438,6 @@ export class MapUtils {
                 }
             }
             
-            selected_grid.isKeypoint = existIsolate;
             if (existIsolate) {
                 points.push(selected_grid);
             }

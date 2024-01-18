@@ -31,7 +31,10 @@ export interface IGrid {
     flag: number,
     cost?: number,
     prev?: IGrid,
-    isKeypoint?: boolean,
+    /** 临近关键点 */
+    nearPoints?: IGrid[],
+    /** 临近关键点距离 */
+    nearPointsDisCache?: number[],
 
     /** 部分算法内部的的临时变量 */
     tmpUsed?: boolean,
