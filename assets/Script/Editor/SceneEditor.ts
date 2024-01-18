@@ -321,7 +321,7 @@ export default class SceneEditor extends cc.Component {
         }
 
         /** 生成向量图 */
-        MapUtils.createVectorMap(this._mapSize, this._graph, this._grids);
+        MapUtils.createVectorMap(this._mapSize, this._graph, this._grids, this._currMapPos);
         /** 显示网格代价 */
         if (detail) {
             for(var i = 0; i < this._grids.length; i++) {

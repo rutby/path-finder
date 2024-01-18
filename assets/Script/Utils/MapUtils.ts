@@ -139,6 +139,7 @@ export class MapUtils {
         map.forEach(element => {
             element.cost = -1;
             element.prev = null;
+            element.isConnectTarget = false;
         });
 
         var target_index = this.convertMapPosToIndex(mapSize, targetPos);
@@ -211,6 +212,7 @@ export class MapUtils {
             /** 先看能不能直接到目标 */
             if (this.isConnect(rects, selected_grid, targetPos)) {
                 selected_grid.cost = this.getGridDis(selected_grid, targetPos);
+                selected_grid.isConnectTarget = true;
             } else {
                 this.getNearestPoint(selected_grid, result);
                 if (result.cost != null) {
@@ -302,12 +304,15 @@ export class MapUtils {
     }
 
     /** 生成向量图 */
-    static createVectorMap(mapSize: cc.Size, graph: IGraph, map: IGrid[]) {
+    static createVectorMap(mapSize: cc.Size, graph: IGraph, map: IGrid[], targetPos: cc.Vec2) {
         let result: INearestPoint = {};
 
+        let target_index = this.convertMapPosToIndex(mapSize, targetPos);
+        let target_grid = map[target_index];
         for(let i = 0; i < map.length; i++) {
             var selected_grid = map[i];
             selected_grid.prev = null;
+            var prev_grid = selected_grid;
 
             /** 排除地形 */
             if (selected_grid.flag == EnumFlagType.Terrain) {
@@ -318,27 +323,33 @@ export class MapUtils {
             if (selected_grid.cost == 0) {
                 continue;
             }
+
+            /** 与目标直连通 */
+            if (selected_grid.isConnectTarget) {
+                prev_grid = target_grid;
+            }
             
             /** 优先处理关键点 */
-            var neighbors = graph[selected_grid.index];
-            var prev_grid = selected_grid;
-            for(var key in neighbors) {
-                let neighbor_cost = neighbors[key];
-                let neighor_index = Number(key);
-                var neighbor_grid = map[neighor_index];
-                var matched = false;
-                var cost_curr = neighbor_grid.cost + neighbor_cost;
+            if (prev_grid == selected_grid) {
+                var neighbors = graph[selected_grid.index];
+                for(var key in neighbors) {
+                    let neighbor_cost = neighbors[key];
+                    let neighor_index = Number(key);
+                    var neighbor_grid = map[neighor_index];
+                    var matched = false;
+                    var cost_curr = neighbor_grid.cost + neighbor_cost;
 
-                if (cost_curr < prev_grid.cost) {
-                    matched = true;
-                } else if (cost_curr == prev_grid.cost) {
-                    if (neighbor_grid.cost < prev_grid.cost) {
+                    if (cost_curr < prev_grid.cost) {
                         matched = true;
+                    } else if (cost_curr == prev_grid.cost) {
+                        if (neighbor_grid.cost < prev_grid.cost) {
+                            matched = true;
+                        }
                     }
-                }
 
-                if (matched) {
-                    prev_grid = neighbor_grid;
+                    if (matched) {
+                        prev_grid = neighbor_grid;
+                    }
                 }
             }
 

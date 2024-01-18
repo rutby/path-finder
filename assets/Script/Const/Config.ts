@@ -24,7 +24,7 @@ export interface IPos {
     y: number,
 }
 
-export interface IGrid {
+export interface IGrid {v
     x: number,
     y: number,
     index: number,
@@ -37,6 +37,8 @@ export interface IGrid {
     nearPoints?: IGrid[],
     /** 临近关键点距离 */
     nearPointsDisCache?: number[],
+    /** 是否与目标点连通 */
+    isConnectTarget?: boolean,
 
     /** 部分算法内部的的临时变量 */
     tmpUsed?: boolean,
