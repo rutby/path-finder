@@ -1,7 +1,7 @@
 import EventMgr from "../Components/EventMgr";
 import KeyboardListener from "../Components/KeyboardListener";
-import { Config, EnumFlagType, EnumOrientation, Events, IGrid, IMoveUnit, IPos, ISegment } from "../Const/Config";
-import { MapUtils } from "../Utils/MapUtils";
+import { Config, Events } from "../Const/Config";
+import { RTS } from "../Utils/MapUtils";
 import { MiscUtils } from "../Utils/MiscUtils";
 
 var GridW = Config.GridSize.width;
@@ -28,13 +28,14 @@ export default class SceneEditor extends cc.Component {
     _currMapPos: cc.Vec2 = null;
     _labels: cc.Label[] = [];
     _arrows: cc.Node[] = [];
-    _units: IMoveUnit[] = [];
+    _units: RTS.PathFinder.IMoveUnit[] = [];
     /** 地图网格尺寸 50x50 */
     _mapSize: cc.Size = null;
-    _grids: IGrid[] = null;
+    _grids: RTS.PathFinder.IGrid[] = null;
     _graph: any = {};
-    _points: IGrid[] = null;
-    _segments: ISegment[] = null;
+    _points: RTS.PathFinder.IGrid[] = null;
+    _segments: RTS.PathFinder.ISegment[] = null;
+    _pathFinder: RTS.PathFinder.Dijkstra = null;
 
     //================================================ cc.Component
     start () {
@@ -57,6 +58,7 @@ export default class SceneEditor extends cc.Component {
         if (!CC_EDITOR) {
             this.nodeHelp.active = false;
         }
+        this._pathFinder = new RTS.PathFinder.Dijkstra(this._mapSize, Config.GridSize);
 
         this.node.on(cc.Node.EventType.TOUCH_START, this.onTouchBegan, this);
         this.node.on(cc.Node.EventType.TOUCH_MOVE, this.onTouchMove, this);
@@ -91,8 +93,8 @@ export default class SceneEditor extends cc.Component {
                 
                 /** 选择下个目标点 */
                 if (unit.isArrived) {
-                    var mapPos = MapUtils.convertViewPosToMapPos(unit.node.position);
-                    var mapIndex = MapUtils.convertMapPosToIndex(this._mapSize, mapPos);
+                    var mapPos = this._pathFinder.convertViewPosToMapPos(unit.node.position);
+                    var mapIndex = this._pathFinder.convertMapPosToIndex(mapPos);
                     var grid = this._grids[mapIndex];
                     if (grid.prev) {
                         unit.dstMapPos = grid.prev;
@@ -111,7 +113,7 @@ export default class SceneEditor extends cc.Component {
                     percent = cc.misc.clamp01(disStep / disTotal);
                 }
                 unit.curMapPos = curVec2.lerp(dstVec2, percent);
-                unit.node.setPosition(MapUtils.convertMapPosToViewPos(unit.curMapPos));
+                unit.node.setPosition(this._pathFinder.convertMapPosToViewPos(unit.curMapPos));
 
                 if (percent == 1) {
                     unit.isArrived = true;
@@ -165,14 +167,14 @@ export default class SceneEditor extends cc.Component {
                     var x = MiscUtils.randomRangeInt(0, 49);
                     var y = MiscUtils.randomRangeInt(0, 49);
                     var mapPos = cc.v2(x, y);
-                    var index = MapUtils.convertMapPosToIndex(this._mapSize, mapPos);
+                    var index = this._pathFinder.convertMapPosToIndex(mapPos);
                     var grid = this._grids[index];
-                } while (grid.flag != EnumFlagType.Path && !occupied[index]);
+                } while (grid.flag != RTS.PathFinder.EnumFlagType.Path && !occupied[index]);
                 occupied[index] = true;
 
                 var unit = this._units[i];
                 unit.curMapPos = grid;
-                unit.node.setPosition(MapUtils.convertMapPosToViewPos(grid));
+                unit.node.setPosition(this._pathFinder.convertMapPosToViewPos(grid));
                 unit.isArrived = true;
             }
         }
@@ -206,7 +208,7 @@ export default class SceneEditor extends cc.Component {
 
         for(let i = 0; i < this._grids.length; i++) {
             let grid = this._grids[i];
-            let index = MapUtils.convertMapPosToIndex(this._mapSize, grid);
+            let index = this._pathFinder.convertMapPosToIndex(grid);
             this._labels[i].string = this._enableIndex? `${index}`: '';
             this._labels[i].node.scale = this._enableIndex? 0.33: 1;
         }
@@ -253,12 +255,12 @@ export default class SceneEditor extends cc.Component {
 
     selectTarget(posWorld: cc.Vec2) {
         var posLocal = this.graphGrids.node.convertToNodeSpaceAR(posWorld);
-        var posLogic = MapUtils.convertViewPosToMapPos(posLocal);
+        var posLogic = this._pathFinder.convertViewPosToMapPos(posLocal);
 
         /** 排除地形 */
-        let target_index = MapUtils.convertMapPosToIndex(this._mapSize, posLogic);
+        let target_index = this._pathFinder.convertMapPosToIndex(posLogic);
         let target_grid = this._grids[target_index];
-        if (target_grid.flag == EnumFlagType.Terrain) {
+        if (target_grid.flag == RTS.PathFinder.EnumFlagType.Terrain) {
             return;
         }
 
@@ -308,32 +310,32 @@ export default class SceneEditor extends cc.Component {
         this.fillGrid(this.graphTarget, this._currMapPos);
     }
 
-    _lastMapPos: IPos = null;
+    _lastMapPos: RTS.PathFinder.IPos = null;
     /**
      * 绘制热力图
      */
     showHeatMap(detail?: boolean) {
         // MiscUtils.timeRecordStart('showHeatMap');
         if (this._enableOptmize) {
-            MapUtils.delGraphElement(this._mapSize, this._graph, this._grids, this._lastMapPos);
-            MapUtils.addGraphElement(this._mapSize, this._graph, this._grids, this._points, this._segments, this._currMapPos);
+            this._pathFinder.delGraphElement(this._graph, this._grids, this._lastMapPos);
+            this._pathFinder.addGraphElement(this._graph, this._grids, this._points, this._segments, this._currMapPos);
         }
-        MapUtils.createHeatMap(this._mapSize, this._graph, this._grids, this._currMapPos);
+        this._pathFinder.createHeatMap(this._graph, this._grids, this._currMapPos);
         if (this._enableOptmize) {
-            MapUtils.createFullHeatMap(this._mapSize, this._grids, this._segments, this._currMapPos);
+            this._pathFinder.createFullHeatMap(this._grids, this._segments, this._currMapPos);
         }
 
         /** 显示网格代价 */
         if (detail) {
             for(let i = 0; i < this._grids.length; i++) {
                 let grid = this._grids[i];
-                this._labels[i].string = grid.flag == EnumFlagType.Path? `${Number(grid.cost).toFixed(0)}`: '';
+                this._labels[i].string = grid.flag == RTS.PathFinder.EnumFlagType.Path? `${Number(grid.cost).toFixed(0)}`: '';
                 this._labels[i].node.scale = 0.5;
             }
         }
 
         /** 生成向量图 */
-        MapUtils.createVectorMap(this._mapSize, this._graph, this._grids, this._currMapPos);
+        this._pathFinder.createVectorMap(this._graph, this._grids, this._currMapPos);
         /** 显示网格代价 */
         if (detail) {
             for(var i = 0; i < this._grids.length; i++) {
@@ -379,7 +381,7 @@ export default class SceneEditor extends cc.Component {
             let segment = this._segments[i];
             let startPos = segment.points[0];
             let endPos = segment.points[1];
-            if (segment.orient == EnumOrientation.Horizontal) {
+            if (segment.orient == RTS.PathFinder.EnumOrientation.Horizontal) {
                 for(let x = startPos.x; x <= endPos.x; x++) {
                     this.fillSegment(this.graphSegmentsHori, startPos, endPos);
                 }
@@ -395,7 +397,7 @@ export default class SceneEditor extends cc.Component {
     /** 加载地图数据 */
     loadMap() {
         //================================================ 加载网格数据
-        var grids: IGrid[] = [];
+        var grids: RTS.PathFinder.IGrid[] = [];
         var tiles = this.tilemap.getLayers()[0].getTiles();
         var mh = this._mapSize.height;
         var mw = this._mapSize.width;
@@ -405,7 +407,7 @@ export default class SceneEditor extends cc.Component {
                 var fy = (mh - y - 1);
                 var tileIndex = fy * mw + x;
                 var mapIndex = y * mw + x;
-                var mapPos = MapUtils.convertIndexToMapPos(this._mapSize, mapIndex);
+                var mapPos = this._pathFinder.convertIndexToMapPos(mapIndex);
                 grids.push({
                     x: mapPos.x,
                     y: mapPos.y,
@@ -420,16 +422,16 @@ export default class SceneEditor extends cc.Component {
         //================================================ 生成连通图
         if (this._enableOptmize) {
             /** 生成关键点 */
-            this._points = MapUtils.createKeypoints(this._mapSize, this._grids);
+            this._points = this._pathFinder.createKeypoints(this._grids);
 
             /** 生成阻挡线段 */
-            this._segments = MapUtils.createSegments(this._mapSize, this._grids);
+            this._segments = this._pathFinder.createSegments(this._grids);
 
             /** 生成关键点连通图 */
-            this._graph = MapUtils.createGraphByPoints(this._mapSize, this._points, this._segments, this._grids);
+            this._graph = this._pathFinder.createGraphByPoints(this._points, this._segments, this._grids);
         } else {
             /** 生成网格连通图 */
-            this._graph = MapUtils.createGraphByGrids(this._mapSize, this._grids);
+            this._graph = this._pathFinder.createGraphByGrids(this._grids);
         }
     }
 
@@ -450,7 +452,7 @@ export default class SceneEditor extends cc.Component {
         for(var y = 0; y < h; y++) {
             for(var x = 0; x < w; x++) {
                 var grid = {x: x, y: y};
-                var viewPos = MapUtils.convertMapPosToViewPos(grid);
+                var viewPos = this._pathFinder.convertMapPosToViewPos(grid);
                 
                 var node = new cc.Node();
                 node.parent = this.nodeLabels;
@@ -482,7 +484,7 @@ export default class SceneEditor extends cc.Component {
         for(var y = 0; y < h; y++) {
             for(var x = 0; x < w; x++) {
                 var grid = {x: x, y: y};
-                var viewPos = MapUtils.convertMapPosToViewPos(grid);
+                var viewPos = this._pathFinder.convertMapPosToViewPos(grid);
                 
                 var node = new cc.Node();
                 node.parent = this.nodeArrows;
@@ -523,7 +525,7 @@ export default class SceneEditor extends cc.Component {
 
     //================================================ utils
     /** 填充网格 */
-    fillGrid(graph: cc.Graphics, mapPos: IPos, noBorder?: boolean) {
+    fillGrid(graph: cc.Graphics, mapPos: RTS.PathFinder.IPos, noBorder?: boolean) {
         var x = mapPos.x * GridW;
         var y = mapPos.y * GridH;
         var w = GridW;
@@ -540,7 +542,7 @@ export default class SceneEditor extends cc.Component {
     }
 
     /** 填充连续网格 */
-    fillSegment(graph: cc.Graphics, startMapPos: IPos, endMapPos: IPos,) {
+    fillSegment(graph: cc.Graphics, startMapPos: RTS.PathFinder.IPos, endMapPos: RTS.PathFinder.IPos,) {
         var x = startMapPos.x * GridW;
         var y = startMapPos.y * GridH;
         var w = (endMapPos.x - startMapPos.x + 1) * GridW;
@@ -556,7 +558,7 @@ export default class SceneEditor extends cc.Component {
     }
 
     /** 画线 */
-    strokeLine(graph: cc.Graphics, startMapPos: IPos, endMapPos: IPos) {
+    strokeLine(graph: cc.Graphics, startMapPos: RTS.PathFinder.IPos, endMapPos: RTS.PathFinder.IPos) {
         var sx = startMapPos.x * GridW;
         var sy = startMapPos.y * GridH;
         var ex = endMapPos.x * GridW;
