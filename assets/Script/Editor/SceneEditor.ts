@@ -39,7 +39,7 @@ export default class SceneEditor extends cc.Component {
     //================================================ cc.Component
     start () {
         //====================== 
-        this.node.addComponent(KeyboardListener);
+        !CC_EDITOR && this.node.addComponent(KeyboardListener);
         EventMgr.sub(Events.Debug_Switch_Profiler, this.onEventSwitchProfiler, this);
         EventMgr.sub(Events.Debug_Switch_Units, this.onEventSwitchUnits, this);
         EventMgr.sub(Events.Debug_Switch_VectorMap, this.onEventSwitchVector, this);
