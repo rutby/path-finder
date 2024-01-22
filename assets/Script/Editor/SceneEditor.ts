@@ -28,13 +28,10 @@ export default class SceneEditor extends cc.Component {
     _currMapPos: cc.Vec2 = null;
     _labels: cc.Label[] = [];
     _arrows: cc.Node[] = [];
-    _units: RTS.PathFinder.IMoveUnit[] = [];
+    _units: RTS.PathFinderAdapter.IMoveUnit[] = [];
     /** 地图网格尺寸 50x50 */
     _mapSize: cc.Size = null;
     _grids: RTS.PathFinder.IGrid[] = null;
-    _graph: any = {};
-    _points: RTS.PathFinder.IGrid[] = null;
-    _segments: RTS.PathFinder.ISegment[] = null;
     _pathFinder: RTS.PathFinder.Dijkstra = null;
 
     //================================================ cc.Component
@@ -58,7 +55,6 @@ export default class SceneEditor extends cc.Component {
         if (!CC_EDITOR) {
             this.nodeHelp.active = false;
         }
-        this._pathFinder = new RTS.PathFinder.Dijkstra(this._mapSize, Config.GridSize);
 
         this.node.on(cc.Node.EventType.TOUCH_START, this.onTouchBegan, this);
         this.node.on(cc.Node.EventType.TOUCH_MOVE, this.onTouchMove, this);
@@ -81,43 +77,12 @@ export default class SceneEditor extends cc.Component {
             this.selectTarget(cc.v2(x, y));
         }
 
-        if (this._enableUnits) {
+        if (this._enableUnits && this._pathFinder) {
             var moveSpeed = 4;
             var disStep = moveSpeed * dt;
 
             for(var i = 0; i < this._units.length; i++) {
-                var unit = this._units[i];
-                if (unit.ended) {
-                    continue;
-                }
-                
-                /** 选择下个目标点 */
-                if (unit.isArrived) {
-                    var mapPos = this._pathFinder.convertViewPosToMapPos(unit.node.position);
-                    var mapIndex = this._pathFinder.convertMapPosToIndex(mapPos);
-                    var grid = this._grids[mapIndex];
-                    if (grid.prev) {
-                        unit.dstMapPos = grid.prev;
-                        unit.isArrived = false;
-                    } else {
-                        unit.ended = true;
-                    }
-                }
-
-                var curVec2 = cc.v2(unit.curMapPos.x, unit.curMapPos.y);
-                var dstVec2 = cc.v2(unit.dstMapPos.x, unit.dstMapPos.y);
-                let disTotal = dstVec2.sub(curVec2).mag();
-                let percent = 1;
-                if (disTotal > 0.0001) {
-                    //@todo(chentao)
-                    percent = cc.misc.clamp01(disStep / disTotal);
-                }
-                unit.curMapPos = curVec2.lerp(dstVec2, percent);
-                unit.node.setPosition(this._pathFinder.convertMapPosToViewPos(unit.curMapPos));
-
-                if (percent == 1) {
-                    unit.isArrived = true;
-                }
+                RTS.PathFinderAdapter.Mover.stepDijkstra(this._pathFinder, this._units[i], disStep);
             }
         }
     }
@@ -167,14 +132,14 @@ export default class SceneEditor extends cc.Component {
                     var x = MiscUtils.randomRangeInt(0, 49);
                     var y = MiscUtils.randomRangeInt(0, 49);
                     var mapPos = cc.v2(x, y);
-                    var index = this._pathFinder.convertMapPosToIndex(mapPos);
+                    var index = RTS.PathFinder.MiscUtils.convertMapPosToIndex(mapPos, this._mapSize);
                     var grid = this._grids[index];
                 } while (grid.flag != RTS.PathFinder.EnumFlagType.Path && !occupied[index]);
                 occupied[index] = true;
 
                 var unit = this._units[i];
                 unit.curMapPos = grid;
-                unit.node.setPosition(this._pathFinder.convertMapPosToViewPos(grid));
+                unit.node.setPosition(RTS.PathFinder.MiscUtils.convertMapPosToViewPos(grid, Config.GridSize));
                 unit.isArrived = true;
             }
         }
@@ -208,7 +173,7 @@ export default class SceneEditor extends cc.Component {
 
         for(let i = 0; i < this._grids.length; i++) {
             let grid = this._grids[i];
-            let index = this._pathFinder.convertMapPosToIndex(grid);
+            let index = RTS.PathFinder.MiscUtils.convertMapPosToIndex(grid, this._mapSize);
             this._labels[i].string = this._enableIndex? `${index}`: '';
             this._labels[i].node.scale = this._enableIndex? 0.33: 1;
         }
@@ -255,10 +220,10 @@ export default class SceneEditor extends cc.Component {
 
     selectTarget(posWorld: cc.Vec2) {
         var posLocal = this.graphGrids.node.convertToNodeSpaceAR(posWorld);
-        var posLogic = this._pathFinder.convertViewPosToMapPos(posLocal);
+        var posLogic = RTS.PathFinder.MiscUtils.convertViewPosToMapPos(posLocal, Config.GridSize);
 
         /** 排除地形 */
-        let target_index = this._pathFinder.convertMapPosToIndex(posLogic);
+        let target_index = RTS.PathFinder.MiscUtils.convertMapPosToIndex(posLogic, this._mapSize);
         let target_grid = this._grids[target_index];
         if (target_grid.flag == RTS.PathFinder.EnumFlagType.Terrain) {
             return;
@@ -315,15 +280,7 @@ export default class SceneEditor extends cc.Component {
      * 绘制热力图
      */
     showHeatMap(detail?: boolean) {
-        // MiscUtils.timeRecordStart('showHeatMap');
-        if (this._enableOptmize) {
-            this._pathFinder.delGraphElement(this._graph, this._grids, this._lastMapPos);
-            this._pathFinder.addGraphElement(this._graph, this._grids, this._points, this._segments, this._currMapPos);
-        }
-        this._pathFinder.createHeatMap(this._graph, this._grids, this._currMapPos);
-        if (this._enableOptmize) {
-            this._pathFinder.createFullHeatMap(this._grids, this._segments, this._currMapPos);
-        }
+        this._pathFinder.update(this._currMapPos);
 
         /** 显示网格代价 */
         if (detail) {
@@ -333,9 +290,6 @@ export default class SceneEditor extends cc.Component {
                 this._labels[i].node.scale = 0.5;
             }
         }
-
-        /** 生成向量图 */
-        this._pathFinder.createVectorMap(this._graph, this._grids, this._currMapPos);
         /** 显示网格代价 */
         if (detail) {
             for(var i = 0; i < this._grids.length; i++) {
@@ -358,27 +312,28 @@ export default class SceneEditor extends cc.Component {
         }
 
         this._lastMapPos = this._currMapPos;
-        // MiscUtils.timeRecordEnd('showHeatMap');
     }
 
     /** 绘制关键点 */
     showKeypoints() {
-        if (!this._points) {
+        let points = this._pathFinder.getKeypoints();
+        if (!points) {
             return;
         }
 
         /** 显示关键点 */
         this.graphKeypoint.clear();
-        for(var i = 0; i < this._points.length; i++) {
-            var grid = this._points[i];
+        for(var i = 0; i < points.length; i++) {
+            var grid = points[i];
             this.fillGrid(this.graphKeypoint, grid);
         }
 
         /** 显示阻挡线段 */
         this.graphSegmentsHori.clear();
         this.graphSegmentsVert.clear();
-        for(let i = 0; i < this._segments.length; i++) {
-            let segment = this._segments[i];
+        let segments = this._pathFinder.getSegments();
+        for(let i = 0; i < segments.length; i++) {
+            let segment = segments[i];
             let startPos = segment.points[0];
             let endPos = segment.points[1];
             if (segment.orient == RTS.PathFinder.EnumOrientation.Horizontal) {
@@ -407,7 +362,7 @@ export default class SceneEditor extends cc.Component {
                 var fy = (mh - y - 1);
                 var tileIndex = fy * mw + x;
                 var mapIndex = y * mw + x;
-                var mapPos = this._pathFinder.convertIndexToMapPos(mapIndex);
+                var mapPos = RTS.PathFinder.MiscUtils.convertIndexToMapPos(mapIndex, this._mapSize);
                 grids.push({
                     x: mapPos.x,
                     y: mapPos.y,
@@ -418,21 +373,7 @@ export default class SceneEditor extends cc.Component {
             }
         }
         this._grids = grids;
-
-        //================================================ 生成连通图
-        if (this._enableOptmize) {
-            /** 生成关键点 */
-            this._points = this._pathFinder.createKeypoints(this._grids);
-
-            /** 生成阻挡线段 */
-            this._segments = this._pathFinder.createSegments(this._grids);
-
-            /** 生成关键点连通图 */
-            this._graph = this._pathFinder.createGraphByPoints(this._points, this._segments, this._grids);
-        } else {
-            /** 生成网格连通图 */
-            this._graph = this._pathFinder.createGraphByGrids(this._grids);
-        }
+        this._pathFinder = new RTS.PathFinder.Dijkstra(this._mapSize, Config.GridSize, this._grids, this._enableOptmize);
     }
 
     /** 创建用于调试网格的文字集 */
@@ -452,7 +393,7 @@ export default class SceneEditor extends cc.Component {
         for(var y = 0; y < h; y++) {
             for(var x = 0; x < w; x++) {
                 var grid = {x: x, y: y};
-                var viewPos = this._pathFinder.convertMapPosToViewPos(grid);
+                var viewPos = RTS.PathFinder.MiscUtils.convertMapPosToViewPos(grid, Config.GridSize);
                 
                 var node = new cc.Node();
                 node.parent = this.nodeLabels;
@@ -484,7 +425,7 @@ export default class SceneEditor extends cc.Component {
         for(var y = 0; y < h; y++) {
             for(var x = 0; x < w; x++) {
                 var grid = {x: x, y: y};
-                var viewPos = this._pathFinder.convertMapPosToViewPos(grid);
+                var viewPos = RTS.PathFinder.MiscUtils.convertMapPosToViewPos(grid, Config.GridSize);
                 
                 var node = new cc.Node();
                 node.parent = this.nodeArrows;
