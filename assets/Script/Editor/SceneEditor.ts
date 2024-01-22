@@ -32,7 +32,7 @@ export default class SceneEditor extends cc.Component {
     /** 地图网格尺寸 50x50 */
     _mapSize: cc.Size = null;
     _grids: RTS.PathFinder.IGrid[] = null;
-    _pathFinder: RTS.PathFinder.Dijkstra = null;
+    _pathFinder: RTS.PathFinder.IStrategy = null;
 
     //================================================ cc.Component
     start () {
@@ -78,11 +78,11 @@ export default class SceneEditor extends cc.Component {
         }
 
         if (this._enableUnits && this._pathFinder) {
-            var moveSpeed = 4;
+            var moveSpeed = 4 * 50;
             var disStep = moveSpeed * dt;
 
             for(var i = 0; i < this._units.length; i++) {
-                RTS.PathFinderAdapter.Mover.stepDijkstra(this._pathFinder, this._units[i], disStep);
+                this._pathFinder.stepMove(this._pathFinder, this._units[i], disStep);
             }
         }
     }
@@ -134,7 +134,7 @@ export default class SceneEditor extends cc.Component {
                     var mapPos = cc.v2(x, y);
                     var index = RTS.PathFinder.MiscUtils.convertMapPosToIndex(mapPos, this._mapSize);
                     var grid = this._grids[index];
-                } while (grid.flag != RTS.PathFinder.EnumFlagType.Path && !occupied[index]);
+                } while (grid.flag != RTS.PathFinder.EnumFlagType.PATH && !occupied[index]);
                 occupied[index] = true;
 
                 var unit = this._units[i];
@@ -225,7 +225,7 @@ export default class SceneEditor extends cc.Component {
         /** 排除地形 */
         let target_index = RTS.PathFinder.MiscUtils.convertMapPosToIndex(posLogic, this._mapSize);
         let target_grid = this._grids[target_index];
-        if (target_grid.flag == RTS.PathFinder.EnumFlagType.Terrain) {
+        if (target_grid.flag == RTS.PathFinder.EnumFlagType.TERRAIN) {
             return;
         }
 
@@ -280,13 +280,13 @@ export default class SceneEditor extends cc.Component {
      * 绘制热力图
      */
     showHeatMap(detail?: boolean) {
-        this._pathFinder.update(this._currMapPos);
+        this._pathFinder.update(RTS.PathFinder.MiscUtils.convertMapPosToViewPos(this._currMapPos, Config.GridSize));
 
         /** 显示网格代价 */
         if (detail) {
             for(let i = 0; i < this._grids.length; i++) {
                 let grid = this._grids[i];
-                this._labels[i].string = grid.flag == RTS.PathFinder.EnumFlagType.Path? `${Number(grid.cost).toFixed(0)}`: '';
+                this._labels[i].string = grid.flag == RTS.PathFinder.EnumFlagType.PATH? `${Number(grid.cost).toFixed(0)}`: '';
                 this._labels[i].node.scale = 0.5;
             }
         }
@@ -316,6 +316,7 @@ export default class SceneEditor extends cc.Component {
 
     /** 绘制关键点 */
     showKeypoints() {
+        //@ts-ignore
         let points = this._pathFinder.getKeypoints();
         if (!points) {
             return;
@@ -331,12 +332,13 @@ export default class SceneEditor extends cc.Component {
         /** 显示阻挡线段 */
         this.graphSegmentsHori.clear();
         this.graphSegmentsVert.clear();
+        //@ts-ignore
         let segments = this._pathFinder.getSegments();
         for(let i = 0; i < segments.length; i++) {
             let segment = segments[i];
             let startPos = segment.points[0];
             let endPos = segment.points[1];
-            if (segment.orient == RTS.PathFinder.EnumOrientation.Horizontal) {
+            if (segment.orient == RTS.PathFinder.EnumOrientation.HORIZONTAL) {
                 for(let x = startPos.x; x <= endPos.x; x++) {
                     this.fillSegment(this.graphSegmentsHori, startPos, endPos);
                 }
@@ -373,7 +375,7 @@ export default class SceneEditor extends cc.Component {
             }
         }
         this._grids = grids;
-        this._pathFinder = new RTS.PathFinder.Dijkstra(this._mapSize, Config.GridSize, this._grids, this._enableOptmize);
+        this._pathFinder = RTS.PathFinderAdapter.StrategyFactory.create(RTS.PathFinderAdapter.EnumStrategy.DIJKSTRA, this._mapSize, Config.GridSize, this._grids, this._enableOptmize);
     }
 
     /** 创建用于调试网格的文字集 */

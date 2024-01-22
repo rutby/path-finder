@@ -1,14 +1,15 @@
 export namespace RTS {
+	/** 纯算法部分, 业务逻辑放到PathFinderUtils中 */
     export namespace PathFinder {
         //================================================ enum
-        export enum EnumOrientation {
-            Horizontal,
-            Vertical,
+        export const enum EnumOrientation {
+            HORIZONTAL,
+            VERTICAL,
         }
 
-        export enum EnumFlagType {
-            Path = 0,
-            Terrain = 1,
+        export const enum EnumFlagType {
+            PATH = 0,
+            TERRAIN = 1,
         }
 
         //================================================ interface
@@ -58,14 +59,7 @@ export namespace RTS {
         //================================================ typedefine
         type IGraph = {[key: string]: {[key: string]: number}};
         type INearestPoint = {point?: IGrid, cost?: number};
-        var Axis4 = [
-            cc.v2(0, 1),
-            cc.v2(0, -1),
-            cc.v2(-1, 0),
-            cc.v2(1, 0),
-        ];
-        
-        var Axis8 = [
+        var axis8 = [
             cc.v2(-1, 1),
             cc.v2(0, 1),
             cc.v2(1, 1),
@@ -76,14 +70,15 @@ export namespace RTS {
             cc.v2(-1, 0),
         ];
 
-        //================================================ classes
-        export class MiscUtils {
+		//================================================ classes
+		/** 工具类 */
+		export class MiscUtils {
             private static _r0: any = {x: 0, y: 0};
             private static _r1: any = {x: 0, y: 0};
             private static _r2: any = {x: 0, y: 0};
             private static _r3: any = {x: 0, y: 0};
             /** 线段与矩形是否相交 */
-            public static intersectionLineRect(a1, a2, b): boolean {
+            public static intersectionLineRect(a1: IPos, a2: IPos, b: cc.Rect): boolean {
                 this._r0.x = b.x;
                 this._r0.y = b.y;
                 this._r1.x = b.x;
@@ -109,9 +104,9 @@ export namespace RTS {
             }
         
             /** 线段与线段是否相交 */
-            public static intersectionLineLine(a1, a2, b1, b2): boolean {
-                var ua_t = (b2.x - b1.x) * (a1.y - b1.y) - (b2.y - b1.y) * (a1.x - b1.x);
-                var ub_t = (a2.x - a1.x) * (a1.y - b1.y) - (a2.y - a1.y) * (a1.x - b1.x);
+            public static intersectionLineLine(a1: IPos, a2: IPos, b1: IPos, b2: IPos): boolean {
+				var ua_t = (b2.x - b1.x) * (a1.y - b1.y) - (b2.y - b1.y) * (a1.x - b1.x);
+				var ub_t = (a2.x - a1.x) * (a1.y - b1.y) - (a2.y - a1.y) * (a1.x - b1.x);
                 var u_b  = (b2.y - b1.y) * (a2.x - a1.x) - (b2.x - b1.x) * (a2.y - a1.y);
             
                 if ( u_b !== 0 ) {
@@ -129,7 +124,7 @@ export namespace RTS {
 
             /** UI坐标转换成格子坐标 */
             public static convertViewPosToMapPos(viewPos: IPos, gridSize: cc.Size): cc.Vec2 {
-                return cc.v2(Math.floor(viewPos.x / gridSize.width), Math.floor(viewPos.y / gridSize.height))
+				return cc.v2(Math.floor(viewPos.x / gridSize.width), Math.floor(viewPos.y / gridSize.height));
             }
                 
             /** 格子坐标转换成UI坐标 */
@@ -138,7 +133,7 @@ export namespace RTS {
             }
             
             /** 格子坐标转换成索引 */
-            public static convertMapPosToIndex(mapPos: IPos, mapSize: cc.Size) {
+            public static convertMapPosToIndex(mapPos: IPos, mapSize: cc.Size): number {
                 return (mapPos.y * mapSize.width) + mapPos.x;
             }
             
@@ -146,12 +141,30 @@ export namespace RTS {
             public static convertIndexToMapPos(index: number, mapSize: cc.Size): IPos {
                 var y = Math.floor(index / mapSize.width);
                 var x = index % mapSize.width;
-                return {x: x, y: y}
+				return { x: x, y: y };
             }
-        }
+		}
+
+		export interface IStrategy {
+			/** 更新终点 */
+			update(targetPos: cc.Vec2): void;
+			/** 移动一次(由工厂函数指定) */
+			stepMove?(...args): void;
+		}
+		
+		/** 两点直接差值 */
+		export class Straight implements IStrategy {
+			/** 目标点位置 */
+            public targetPos: IPos = null;
+			
+			/** 更新终点 */
+			public update(targetPos: cc.Vec2): void {
+				this.targetPos = targetPos;
+			}
+		}
 
         /** 以关键点为基本单位的Dijkstra寻路  */
-        export class Dijkstra {
+        export class Dijkstra implements IStrategy {
             /** 地图大小 */
             private _mapSize: cc.Size = null;
             /** 网格大小 */
@@ -169,20 +182,21 @@ export namespace RTS {
             /** 目标点位置 */
             private _targetPos: IPos = null;
 
-            //================================================ public - control
-            public constructor(mapSize: cc.Size, gridSize: cc.Size, grids: IGrid[], enableOptimize: boolean = true) {
-                this._mapSize = mapSize;
-                this._gridSize = gridSize;
-                this._grids = grids;
-                this._enableOptimize = enableOptimize;
+			//================================================ public - control
+			/** constructor */
+            public constructor(...args: any[]) {
+                this._mapSize = args[0];
+                this._gridSize = args[1];
+                this._grids = args[2];
+                this._enableOptimize = args[3] != null? args[3]: true;
 
                 this.generateGraph();
             }
 
-            /** 更新路径 */
+            /** 更新终点 targetPos:UI坐标 */
             public update(targetPos: cc.Vec2): void {
                 let lastTargetPos = this._targetPos;
-                let currTargetPos = targetPos;
+                let currTargetPos = this.convertViewPosToMapPos(targetPos);
 
                 if (this._enableOptimize) {
                     this.delGraphElement(this._graph, this._grids, lastTargetPos);
@@ -194,7 +208,7 @@ export namespace RTS {
                 }
                 this.createVectorMap(this._graph, this._grids, currTargetPos);
                 
-                this._targetPos = targetPos;
+                this._targetPos = currTargetPos;
             }
 
             //================================================ public - query
@@ -209,7 +223,7 @@ export namespace RTS {
             }
 
             /** 获得指定位置的网格 */
-            public getGrid(index): IGrid {
+            public getGrid(index: number): IGrid {
                 return this._grids[index];
             }
 
@@ -224,7 +238,7 @@ export namespace RTS {
             }
             
             /** 格子坐标转换成索引 */
-            public convertMapPosToIndex(mapPos: IPos) {
+            public convertMapPosToIndex(mapPos: IPos): number {
                 return MiscUtils.convertMapPosToIndex(mapPos, this._mapSize);
             }
             
@@ -235,7 +249,7 @@ export namespace RTS {
             
             //================================================ private
             /** 生成连通图 */
-            private generateGraph() {
+            private generateGraph(): void {
                 if (!this._enableOptimize) {
                     /** 生成网格连通图 */
                     this._graph = this.createGraphByGrids(this._grids);
@@ -255,11 +269,11 @@ export namespace RTS {
             private createGraphByGrids(map: IGrid[]): {[key: string]: {[key: string]: number}} {
                 let graph: {[key: string]: {[key: string]: number}} = {};
                 for(let i = 0; i < map.length; i++) {
-                    let nest = {}
+					let nest = {};
                     let selected_grid = map[i];
                     let selected_index = this.convertMapPosToIndex(selected_grid);
-                    let neighbors = this.getAxisNeighbors(selected_grid, Axis8);
-                    if (selected_grid.flag != EnumFlagType.Path) {
+                    let neighbors = this.getAxisNeighbors(selected_grid, axis8);
+                    if (selected_grid.flag !== EnumFlagType.PATH) {
                         continue;
                     }
         
@@ -269,7 +283,7 @@ export namespace RTS {
                         let neighbor_grid = map[neighbor_index];
         
                         /** 排除地形 */
-                        if (neighbor_grid.flag == EnumFlagType.Terrain) {
+                        if (neighbor_grid.flag === EnumFlagType.TERRAIN) {
                             continue;
                         }
         
@@ -299,7 +313,7 @@ export namespace RTS {
                 for(let i = 0; i < map.length; i++) {
                     let selected_grid = map[i];
                     /** 排除地形 */
-                    if (selected_grid.flag == EnumFlagType.Terrain) {
+                    if (selected_grid.flag === EnumFlagType.TERRAIN) {
                         continue;
                     }
                     /** 排除关键点 */
@@ -317,8 +331,8 @@ export namespace RTS {
                             near_points_dis_cache.push(this.getGridDis(selected_grid, point_grid));
                         }
                     }
-                    if (near_points.length == 0) {
-                        cc.warn('#near_points = 0', selected_index);
+					if (near_points.length === 0) {
+                         cc.warn('#near_points = 0', selected_index);
                     }
                     selected_grid.nearPoints = near_points;
                     selected_grid.nearPointsDisCache = near_points_dis_cache;
@@ -363,7 +377,7 @@ export namespace RTS {
                     /** 获得周边邻居 */
                     var neighbors = graph[selected_index];
                     if (!neighbors || neighbors.length) {
-                        cc.warn('neighbors status is wrong', selected_index);
+                         cc.warn('neighbors status is wrong', selected_index);
                         neighbors = {};
                     }
                     for(var key in neighbors) {
@@ -372,19 +386,20 @@ export namespace RTS {
                         let combine_cost = neighbor_cost + selected_cost;
         
                         /** 排除关闭列表 */
-                        if (close_list.find(ele => ele.index == neighor_index)) {
+                        if (close_list.find(ele => ele.index === neighor_index)) {
                             continue;
                         }
         
                         /** 加入/更新开放列表 */
-                        var exist_one = open_list.find(ele => ele.index == neighor_index);
+                        var exist_one = open_list.find(ele => ele.index === neighor_index);
                         if (!exist_one) {
                             var neighor_node = {index: neighor_index, cost: combine_cost};
                             open_list.push(neighor_node);
                         } else {
+                            // eslint-disable-next-line no-lonely-if
                             if (exist_one.cost > combine_cost) {
                                 exist_one.cost = combine_cost;
-                            }
+							}
                         }
                     }
                 }
@@ -398,7 +413,7 @@ export namespace RTS {
                 for(let i = 0; i < map.length; i++) {
                     let selected_grid = map[i];
                     /** 排除地形 */
-                    if (selected_grid.flag == EnumFlagType.Terrain) {
+                    if (selected_grid.flag === EnumFlagType.TERRAIN) {
                         continue;
                     }
                     /** 排除已生成路径 */
@@ -415,7 +430,7 @@ export namespace RTS {
                         if (result.cost != null) {
                             selected_grid.cost = result.cost;
                         } else {
-                            cc.warn("can't find nearest point", selected_grid.index);
+                             cc.warn("can't find nearest point", selected_grid.index);
                         }
                     }
                 }
@@ -433,12 +448,12 @@ export namespace RTS {
                     var prev_grid = selected_grid;
         
                     /** 排除地形 */
-                    if (selected_grid.flag == EnumFlagType.Terrain) {
+                    if (selected_grid.flag === EnumFlagType.TERRAIN) {
                         continue;
                     }
         
                     /** 排除目标点 */
-                    if (selected_grid.cost == 0) {
+                    if (selected_grid.cost === 0) {
                         continue;
                     }
         
@@ -448,7 +463,7 @@ export namespace RTS {
                     }
                     
                     /** 优先处理关键点 */
-                    if (prev_grid == selected_grid) {
+                    if (prev_grid === selected_grid) {
                         var neighbors = graph[selected_grid.index];
                         for(var key in neighbors) {
                             let neighbor_cost = neighbors[key];
@@ -459,7 +474,7 @@ export namespace RTS {
         
                             if (cost_curr < prev_grid.cost) {
                                 matched = true;
-                            } else if (cost_curr == prev_grid.cost) {
+                            } else if (cost_curr === prev_grid.cost) {
                                 if (neighbor_grid.cost < prev_grid.cost) {
                                     matched = true;
                                 }
@@ -472,16 +487,16 @@ export namespace RTS {
                     }
         
                     /** 非关键点网格 */
-                    if (prev_grid == selected_grid) {
+                    if (prev_grid === selected_grid) {
                         this.getNearestPoint(selected_grid, result);
                         if (result.point != null) {
                             prev_grid = result.point;
                         } else {
-                            cc.warn("can't find nearest point", selected_grid.index);
+                             cc.warn("can't find nearest point", selected_grid.index);
                         }
                     }
         
-                    if (prev_grid != selected_grid) {
+                    if (prev_grid !== selected_grid) {
                         selected_grid.prev = prev_grid;
                     }
                 }
@@ -501,7 +516,7 @@ export namespace RTS {
             }
         
             /** 两点间的距离 */
-            private getGridDis(pos0: IPos, pos1: IPos) {
+            private getGridDis(pos0: IPos, pos1: IPos): number {
                 let dx = Math.abs(pos0.x - pos1.x);
                 let dy = Math.abs(pos0.y - pos1.y);
                 let min = Math.min(dx, dy) * 0.0001;
@@ -516,14 +531,14 @@ export namespace RTS {
             private isNarrowCorner(map: IGrid[], pos0: IPos, pos1: IPos): boolean {
                 var dx = pos1.x - pos0.x;
                 var dy = pos1.y - pos0.y;
-                if (dx != 0 && dy != 0) {
+                if (dx !== 0 && dy !== 0) {
                     var side0 = {x: pos1.x, y: pos0.y};
                     var side1 = {x: pos0.x, y: pos1.y};
                     var side0_index = this.convertMapPosToIndex(side0);
                     var side1_index = this.convertMapPosToIndex(side1);
                     var side0_grid = map[side0_index];
                     var side1_grid = map[side1_index];
-                    if (side0_grid.flag == EnumFlagType.Terrain || side1_grid.flag == EnumFlagType.Terrain) {
+                    if (side0_grid.flag === EnumFlagType.TERRAIN || side1_grid.flag === EnumFlagType.TERRAIN) {
                         return true;
                     }
                 }
@@ -539,14 +554,14 @@ export namespace RTS {
                 for(let j = 0; j < near_points.length; j++) {
                     let near_grid = near_points[j];
                     let near_cost = near_points_dis_cache[j];
-                    let total_cost = near_grid.cost + near_cost
+					let total_cost = near_grid.cost + near_cost;
                     if (min_cost == null || total_cost < min_cost) {
                         min_cost = total_cost;
                         nearest_grid = near_grid;
                     }
                 }
                 if (min_cost == null) {
-                    cc.warn('min_cost is null', selected_grid.index);
+                     cc.warn('min_cost is null', selected_grid.index);
                     min_cost = -1;
                 }
         
@@ -557,7 +572,7 @@ export namespace RTS {
             private _posCenter0: IPos = {x: 0, y: 0};
             private _posCenter1: IPos = {x: 0, y: 0};
             private _posCorners0: IPos[] = [{x: 0, y: 0}, {x: 0, y: 0}, {x: 0, y: 0}, {x: 0, y: 0}];
-            private _posCorners1: IPos[] = [{x: 0, y: 0}, {x: 0, y: 0}, {x: 0, y: 0}, {x: 0, y: 0}];
+			private _posCorners1: IPos[] = [{ x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }];
             /** 两点之间是否连通 */
             private isConnect(rects: cc.Rect[], pos0: IPos, pos1: IPos): boolean {
                 /** 转换成网格中心点 */
@@ -651,26 +666,24 @@ export namespace RTS {
             private generateKeypoints(map: IGrid[]): IGrid[] {
                 let points = [];
                 for(let i = 0; i < map.length; i++) {
-                    let blocks: IGrid[] = [];
                     let selected_grid = map[i];
                     var existIsolate = false;
         
-                    if (selected_grid.flag == EnumFlagType.Path) {
-                        let neighbors = this.getAxisNeighbors(selected_grid, Axis8);
+                    if (selected_grid.flag === EnumFlagType.PATH) {
+                        let neighbors = this.getAxisNeighbors(selected_grid, axis8);
                         let last_neighor = neighbors[neighbors.length-1];
                         let last_neighor_index = this.convertMapPosToIndex(last_neighor);
                         let last_neighbor_grid = map[last_neighor_index];
-                        let nearCount = last_neighbor_grid.flag == EnumFlagType.Terrain? 1: 0;
+                        let nearCount = last_neighbor_grid.flag === EnumFlagType.TERRAIN? 1: 0;
                         for(let j = 0; j < neighbors.length; j++) {
                             let neighor_index = this.convertMapPosToIndex(neighbors[j]);
                             let neighbor_grid = map[neighor_index];
-                            if (neighbor_grid.flag == EnumFlagType.Terrain) {
-                                blocks.push(neighbor_grid);
+                            if (neighbor_grid.flag === EnumFlagType.TERRAIN) {
                                 nearCount++;
                             } else {
                                 let dx = Math.abs(neighbor_grid.x - selected_grid.x);
                                 let dy = Math.abs(neighbor_grid.y - selected_grid.y);
-                                if (nearCount == 1 && (dx + dy) == 1) {
+                                if (nearCount === 1 && (dx + dy) === 1) {
                                     existIsolate = true;
                                 }
                                 nearCount = 0;
@@ -700,7 +713,7 @@ export namespace RTS {
                         let selected_grid = map[seleted_map_index];
                         selected_grid.tmpUsed = false;
                         
-                        if (selected_grid.flag == EnumFlagType.Terrain) {
+                        if (selected_grid.flag === EnumFlagType.TERRAIN) {
                             let start_pos = selected_grid;
                             let end_pos = selected_grid;
                             for(let step = i+1; step < this._mapSize.width; step++, i++) {
@@ -708,7 +721,7 @@ export namespace RTS {
                                 tmpMapPos.y = j;
                                 let step_map_index = this.convertMapPosToIndex(tmpMapPos);
                                 let step_grid = map[step_map_index];
-                                if (step_grid.flag == EnumFlagType.Terrain) {
+                                if (step_grid.flag === EnumFlagType.TERRAIN) {
                                     selected_grid.tmpUsed = true;
                                     step_grid.tmpUsed = true;
                                     end_pos = step_grid;
@@ -717,10 +730,10 @@ export namespace RTS {
                                 }
                             }
         
-                            if (start_pos != end_pos) {
+                            if (start_pos !== end_pos) {
                                 segments.push({
                                     points: [start_pos, end_pos],
-                                    orient: EnumOrientation.Horizontal,
+                                    orient: EnumOrientation.HORIZONTAL,
                                 });
                             }
                         }
@@ -735,7 +748,7 @@ export namespace RTS {
                         let seleted_map_index = this.convertMapPosToIndex(tmpMapPos);
                         let selected_grid = map[seleted_map_index];
                         
-                        if (!selected_grid.tmpUsed && selected_grid.flag == EnumFlagType.Terrain) {
+                        if (!selected_grid.tmpUsed && selected_grid.flag === EnumFlagType.TERRAIN) {
                             let start_pos = selected_grid;
                             let end_pos = selected_grid;
                             for(let step = j+1; step < this._mapSize.height; step++, j++) {
@@ -743,7 +756,7 @@ export namespace RTS {
                                 tmpMapPos.x = i;
                                 let step_map_index = this.convertMapPosToIndex(tmpMapPos);
                                 let step_grid = map[step_map_index];
-                                if (step_grid.flag == EnumFlagType.Terrain && !step_grid.tmpUsed) {
+                                if (step_grid.flag === EnumFlagType.TERRAIN && !step_grid.tmpUsed) {
                                     selected_grid.tmpUsed = true;
                                     step_grid.tmpUsed = true;
                                     end_pos = step_grid;
@@ -752,10 +765,10 @@ export namespace RTS {
                                 }
                             }
         
-                            if (start_pos != end_pos) {
+                            if (start_pos !== end_pos) {
                                 segments.push({
                                     points: [start_pos, end_pos],
-                                    orient: EnumOrientation.Vertical,
+                                    orient: EnumOrientation.VERTICAL,
                                 });
                             }
                         }
@@ -766,7 +779,7 @@ export namespace RTS {
             }
             
             /** 更新图元链接状态 */
-            private updateGraphPoint(graph: IGraph, points: IGrid[], rects: cc.Rect[], newPoint: IPos) {
+            private updateGraphPoint(graph: IGraph, points: IGrid[], rects: cc.Rect[], newPoint: IPos): void {
                 let point0 = newPoint;
                 for(let j = 0; j < points.length; j++) {
                     let point1 = points[j];
@@ -781,11 +794,10 @@ export namespace RTS {
                         graph[map_index1][map_index0] = dis;
                     }
                 }
-                return graph;
             }
             
             /** 添加图元 */
-            private addGraphElement(graph: IGraph, map: IGrid[], points: IGrid[], segments: ISegment[], newPoint: IPos) {
+            private addGraphElement(graph: IGraph, map: IGrid[], points: IGrid[], segments: ISegment[], newPoint: IPos): void {
                 if (!newPoint) {
                     return;
                 }
@@ -823,6 +835,7 @@ export namespace RTS {
         }
     }
 
+	/** 寻路算法与业务逻辑适配层 */
     export namespace PathFinderAdapter {
         export interface IMoveUnit {
             node: cc.Node,
@@ -830,9 +843,45 @@ export namespace RTS {
             ended?: boolean,
             dstMapPos?: PathFinder.IPos,
             curMapPos?: PathFinder.IPos,
-        }
-        export class Mover {
-            /** 移动一次 */
+		}
+		
+		/** 移动类 */
+		export class Mover {
+			/** 针对Straight寻路算法的移动 */
+            public static stepStraight(finder: PathFinder.Straight, unit: IMoveUnit, disStep: number): void {
+                if (unit.ended) {
+                    return;
+                }
+
+                /** 选择下个目标点 */
+                if (unit.isArrived) {
+                    let posCurr = unit.node.position;
+                    let posNext = finder.targetPos;
+                    
+                    if (!posCurr.equals(cc.v3(posNext.x, posNext.y))) {
+                        unit.dstMapPos = posNext;
+                        unit.isArrived = false;
+                    } else {
+                        unit.ended = true;
+                        return;
+                    }
+                }
+
+                var curVec2 = unit.node.position;
+                var dstVec2 = cc.v3(unit.dstMapPos.x, unit.dstMapPos.y);
+                let disTotal = dstVec2.sub(curVec2).mag();
+                let percent = 1;
+                if (disTotal > 0.0001) {
+                    percent = cc.misc.clamp01(disStep / disTotal);
+                }
+                unit.node.setPosition(curVec2.lerp(dstVec2, percent));
+
+                if (percent === 1) {
+                    unit.isArrived = true;
+                }
+			}
+			
+            /** 针对Dijkstra寻路算法的移动 */
             public static stepDijkstra(finder: PathFinder.Dijkstra, unit: IMoveUnit, disStep: number): void {
                 if (unit.ended) {
                     return;
@@ -844,28 +893,69 @@ export namespace RTS {
                     var mapIndex = finder.convertMapPosToIndex(mapPos);
                     var grid = finder.getGrid(mapIndex);
                     if (grid.prev) {
-                        unit.dstMapPos = grid.prev;
+                        unit.dstMapPos = finder.convertMapPosToViewPos(grid.prev);
                         unit.isArrived = false;
                     } else {
                         unit.ended = true;
                     }
                 }
 
-                var curVec2 = cc.v2(unit.curMapPos.x, unit.curMapPos.y);
-                var dstVec2 = cc.v2(unit.dstMapPos.x, unit.dstMapPos.y);
+                var curVec2 = unit.node.position;
+                var dstVec2 = cc.v3(unit.dstMapPos.x, unit.dstMapPos.y);
                 let disTotal = dstVec2.sub(curVec2).mag();
                 let percent = 1;
                 if (disTotal > 0.0001) {
                     // @todo(chentao) 多出来的距离不裁剪
                     percent = cc.misc.clamp01(disStep / disTotal);
                 }
-                unit.curMapPos = curVec2.lerp(dstVec2, percent);
-                unit.node.setPosition(finder.convertMapPosToViewPos(unit.curMapPos));
+                unit.node.setPosition(curVec2.lerp(dstVec2, percent));
 
-                if (percent == 1) {
+                if (percent === 1) {
                     unit.isArrived = true;
                 }
             }
-        }
+		}
+
+		export const enum EnumStrategy {
+			STRAIGHT,
+			DIJKSTRA,
+		}
+		
+		/** 算法工厂 */
+		export class StrategyFactory {
+			/** 创建算法 */
+			public static create(strategy: EnumStrategy, ...args: any[]): PathFinder.IStrategy {
+				let finder: PathFinder.IStrategy = null;
+				switch (strategy) {
+					case EnumStrategy.STRAIGHT:
+						{
+                            finder = new PathFinder.Straight();
+							finder.stepMove = Mover.stepStraight;
+							break;
+						}
+					case EnumStrategy.DIJKSTRA:
+						{
+                            finder = new PathFinder.Dijkstra(...args);
+							finder.stepMove = Mover.stepDijkstra;
+							break;
+						}
+					default:
+						 cc.warn("unexpected strategy type", strategy);
+						break;
+				}
+				return finder;
+			}
+		}
     }
 }
+
+/**
+ * 示例代码1
+ * 初始化: this._pathFinder = RTS.PathFinderAdapter.StrategyFactory.create(RTS.PathFinderAdapter.EnumStrategy.DIJKSTRA, cc.size(3, 3), cc.size(32, 32), [0, 0, 0, 0, 1, 0, 0, 0, 0]);
+ * 设置终点: this._pathFinder.update(cc.v2(100, 100));
+ * 移动一步: this._pathFinder.stepMove(this._pathFinder, unit, 0.8);
+ * 示例代码2
+ * 初始化: this._pathFinder = RTS.PathFinderAdapter.StrategyFactory.create(RTS.PathFinderAdapter.EnumStrategy.STRAIGHT);
+ * 设置终点: this._pathFinder.update(cc.v2(100, 100));
+ * 移动一步: this._pathFinder.stepMove(this._pathFinder, unit, 0.8);
+ */
