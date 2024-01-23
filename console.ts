@@ -98,6 +98,7 @@ namespace BehaviorTree {
         private _actionSource: any = null;
         private _root: INode = null;
         private _entity: any = null;
+        private _indexLevel: number = 0;
 
         /** 指定可配参数 */
         constructor(root: INode, conditionSource: any, actionSource: any, entity: any) {
@@ -124,10 +125,17 @@ namespace BehaviorTree {
             this.processNode(this._root);
         }
 
+        log(...args) {
+            let prefix = '    '.repeat(this._indexLevel);
+            console.log(prefix, ...args);
+        }
+
         processNode(node: INode): boolean {
             if (node.nType != EnumNodeType.ACTION) {
-                console.log('[develop] ========', node.name);
+                this.log(node.name);
             }
+            this._indexLevel++;
+
             let result = false;
             switch(node.nType) {
                 case EnumNodeType.SELECTOR:
@@ -180,8 +188,10 @@ namespace BehaviorTree {
             }
 
             if (node.nType == EnumNodeType.ACTION) {
-                console.log('[develop] ========', node.name, result);
+                this.log(node.name, result);
             }
+
+            this._indexLevel--;
             return result;
         }
     }
@@ -210,6 +220,7 @@ namespace Game {
         attackState: EnumAttackState,
         /** 已攻击 - 简单实现 */
         attacked: boolean,
+        dead: boolean,
     }
 
     export class BTCondition {
@@ -238,6 +249,14 @@ namespace Game {
             state = state.toUpperCase();
             return ent.state == EnumStateType[state];
         }
+
+        static isUnitNotDead(ent: IEntity) {
+            return !ent.dead;
+        }
+
+        static isUnitNotBlocked(ent: IEntity) {
+            return true;
+        }
     }
 
     export class BTAction {
@@ -263,25 +282,28 @@ namespace Game {
 }
 
 let dataSource = `
-* 状态检测 - selector
-    * 待机状态检测 - sequence
-        * 是否是待机状态? - condition - isState Idle
-        * 待机状态下策略选择 - selector
-            * 能不能攻击? - sequence    
-                * 攻击范围内有目标? - condition - existEnemyInAttackRadius
-                * 状态 = 攻击 - action - changeState Attack
-            * 能不能移动? - sequence
-                * 没有移动到终点? - condition - isNotArriveDstPos
-                * 状态 = 移动 - action - changeState Move
-    * 攻击状态检测 - sequence
-        * 是否是攻击状态? - condition - isState Attack
-        * 待机状态下策略选择 - selector
-            * 攻击开始了吗? - sequence
-                * 攻击未开始? - condition - isNotAttackStart
-                * 发起攻击 - action - triggerAttack
-            * 攻击结束了吗? - sequence
-                * 攻击动作已结束? - condition - isAttackEnded
-                * 状态 = 待机 - action - changeState Idle`;
+* 入口 - sequence
+    * 单位未死亡 - condition - isUnitNotDead
+    * 单位未驱逐 - condition - isUnitNotBlocked
+    * 状态检测 - selector
+        * 待机状态检测 - sequence
+            * 是否是待机状态? - condition - isState Idle
+            * 待机状态下策略选择 - selector
+                * 能不能攻击? - sequence    
+                    * 攻击范围内有目标? - condition - existEnemyInAttackRadius
+                    * 状态 = 攻击 - action - changeState Attack
+                * 能不能移动? - sequence
+                    * 没有移动到终点? - condition - isNotArriveDstPos
+                    * 状态 = 移动 - action - changeState Move
+        * 攻击状态检测 - sequence
+            * 是否是攻击状态? - condition - isState Attack
+            * 待机状态下策略选择 - selector
+                * 攻击开始了吗? - sequence
+                    * 攻击未开始? - condition - isNotAttackStart
+                    * 发起攻击 - action - triggerAttack
+                * 攻击结束了吗? - sequence
+                    * 攻击动作已结束? - condition - isAttackEnded
+                    * 状态 = 待机 - action - changeState Idle`;
 
 let tree = BehaviorTree.Parser.run(dataSource);
 let entity = {
@@ -290,6 +312,7 @@ let entity = {
     dis: 0,
     attackState: Game.EnumAttackState.Idle,
     attacked: false,
+    dead: false,
 }
 let runner = new BehaviorTree.Runner(tree, Game.BTCondition, Game.BTAction, entity);
 for(var i = 0; i < 5; i++) {
@@ -298,6 +321,9 @@ for(var i = 0; i < 5; i++) {
         entity.attacked = true;
         entity.attackState = Game.EnumAttackState.Idle;
         entity.existEnemy = Math.random() < 0.5;
+    }
+    if (i == 4) {
+        entity.dead = true;
     }
     runner.run();
 }
