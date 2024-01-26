@@ -5,7 +5,7 @@ export class Config {
 
     //====================== Map
     static GridSize: cc.Size = cc.size(32, 32);
-    static MaxUnitCount: number = 30;
+    static MaxUnitCount: number = 300;
     static EnableOptimize: boolean = true;
 }
 

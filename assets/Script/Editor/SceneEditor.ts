@@ -284,11 +284,11 @@ export default class SceneEditor extends cc.Component {
 
         /** 显示网格代价 */
         if (detail) {
-            for(let i = 0; i < this._grids.length; i++) {
-                let grid = this._grids[i];
-                this._labels[i].string = grid.flag == RTS.PathFinder.EnumFlagType.PATH? `${Number(grid.cost).toFixed(0)}`: '';
-                this._labels[i].node.scale = 0.5;
-            }
+            // for(let i = 0; i < this._grids.length; i++) {
+            //     let grid = this._grids[i];
+            //     this._labels[i].string = grid.flag == RTS.PathFinder.EnumFlagType.PATH? `${Number(grid.cost).toFixed(0)}`: '';
+            //     this._labels[i].node.scale = 0.5;
+            // }
         }
         /** 显示网格代价 */
         if (detail) {
