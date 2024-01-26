@@ -716,7 +716,7 @@ export namespace RTS {
                         if (selected_grid.flag === EnumFlagType.TERRAIN) {
                             let start_pos = selected_grid;
                             let end_pos = selected_grid;
-                            for(let step = i+1; step < this._mapSize.width; step++, i++) {
+                            for(let step = i; step < this._mapSize.width; step++, i++) {
                                 tmpMapPos.x = step;
                                 tmpMapPos.y = j;
                                 let step_map_index = this.convertMapPosToIndex(tmpMapPos);
@@ -730,12 +730,13 @@ export namespace RTS {
                                 }
                             }
         
-                            if (start_pos !== end_pos) {
-                                segments.push({
-                                    points: [start_pos, end_pos],
-                                    orient: EnumOrientation.HORIZONTAL,
-                                });
-                            }
+                            // if (start_pos !== end_pos) {
+                                
+                            // }
+                            segments.push({
+                                points: [start_pos, end_pos],
+                                orient: EnumOrientation.HORIZONTAL,
+                            });
                         }
                     }
                 }
